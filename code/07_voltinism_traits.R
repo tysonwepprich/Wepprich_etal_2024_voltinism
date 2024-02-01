@@ -1,6 +1,6 @@
 ## Header ---------------------------
 ## Script name: 07_voltinism_traits.R
-## Purpose of script: 
+## Purpose of script: Analysis of species' traits correlated with population trends, phylogenetic analysis
 ## Author: Tyson Wepprich
 ## Date Created: 2024-01-22
 ## License: CC0 1.0 Universal
@@ -13,7 +13,6 @@ library(corrplot)
 library(ggrepel)
 library(ape)
 library(caper)
-# library(phytools)
 library(lme4)
 library(lmerTest)
 library(broom)
@@ -88,7 +87,7 @@ penult_doy <- moddat %>%
 species_table <- left_join(species_table, penult_doy)
 
 
-
+# Look at species parameters from 05_species_models.R
 
 allpars <- readRDS("data/species_models.rds")
 
@@ -136,17 +135,7 @@ traits <- allpars %>%
 traits <- left_join(traits, distinct(moddat2[,c("CommonName", "maxbrood", "zordspec", "zlastspec")]))
 
 
-
-medtrend = median(traits$trend)
-medsim = median(traits$lg_sim)
-medlgtrend = median(traits$LG_trend)
-
-traits %>% filter(lg_sim < medsim, LG_trend > medlgtrend) # LOST GENERATIONS? median or zero?
-
-
-
-
-# species trait table ----
+# Species trait table ----
 species <- read.csv("data/species_names.csv") %>% 
   dplyr::select(CommonName, Genus, Species) %>%
   distinct() %>% 
@@ -182,9 +171,10 @@ species_table$Sample <- paste(species_table$uniqSY, species_table$uniqSYlam, sep
 species_table_out <- species_table[which(!is.na(species_table$LG_trend)), c("Latin", "Sample", "Generations", "meandoy", "LG_trend", "LGspatial", "LGannual", "LGsim", "PopTrend")] %>% 
   arrange(Latin)
 
+# not included in manuscript
 write.csv(species_table_out, "Table1.csv", row.names = FALSE)
 
-# Fig 4: caterpillar plot ----
+# Fig. 4: caterpillar plot ----
 
 modtraits <- allpars %>% 
   group_by(CommonName) %>% 
@@ -239,7 +229,7 @@ species <- read.csv("data/species_names.csv") %>%
          Latin_abbrev = paste0(str_sub(Genus, 1, 1), ". ", Species)) 
 plttraits <- left_join(traits, species)
 
-# Figure 5B ----
+# Fig. 5B ----
 ggplot(plttraits, aes(x = LG_trend, y = lg_sim, label = Latin_abbrev, color = trend)) +
   geom_point() +
   scale_color_viridis(name = "Population\ntrend", option = "C", begin = .8, end = 0) +
@@ -405,7 +395,7 @@ trends <- data.frame(trends)
 row.names(trends) <- trends$Latin
 
 # PGLS with caper package ----
-# Results in S1 Appendix Tables A and B
+# Results in 
 
 bfly <- comparative.data(tr, trends, 
                          names.col = Latin,
@@ -479,7 +469,7 @@ for (i in 1:1000){
   row.names(trends) <- trends$Latin
   
   # PGLS with caper package ----
-  # Results in S1 Appendix Tables A and B
+  # Results in Table S3
   
   bfly <- comparative.data(tr, trends, 
                            names.col = Latin,
@@ -531,28 +521,13 @@ write.csv(coefs_boot, "data/pgls_boot.csv", row.names = FALSE)
 
 
 
-# Figure S5 ----
 species <- read.csv("data/species_names.csv") %>% 
   dplyr::select(CommonName, Genus, Species) %>%
   distinct() %>% 
   mutate(Latin = paste(Genus, Species, sep = " ")) 
 plttraits <- left_join(traits, species)
 
-ggplot(plttraits, aes(x = lg_sim, y = trend, label = Latin)) +
-  geom_point() +
-  geom_text_repel(size = 4, fontface = 'italic') +
-  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
-  geom_hline(yintercept = 0, linetype = "dashed", alpha = .25) +
-  geom_vline(xintercept = 0, linetype = "dashed", alpha = .25) +
-  geom_abline(intercept = -0.019, slope = 0.0548, alpha = .4, linetype = "solid") +
-  annotate("text", x = -.35, y = .1, label = "paste(italic(t), \" = 2.15, \", d.f., \" = 28, \",italic(P), \" = 0.0396\")", parse = TRUE) +
-  annotate("text", x = -.35, y = .09, label = "paste(italic(R)^{2}, \" = 0.11\")", parse = TRUE) +
-  xlab("Simulated change in overwinter population growth\nwith 1 std. dev. larger last generation") +
-  ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-
-ggsave(filename = "figS5B.tif", path = "figures", device='tiff', dpi=600)
-
+# Fig. S4 ----
 
 ggplot(plttraits, aes(x = LG_trend, y = trend, label = Latin)) +
   geom_point() +
@@ -567,5 +542,23 @@ ggplot(plttraits, aes(x = LG_trend, y = trend, label = Latin)) +
   ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
-ggsave(filename = "figS5A.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS4.tif", path = "figures", device='tiff', dpi=600)
+
+# Fig. S5 ----
+
+ggplot(plttraits, aes(x = lg_sim, y = trend, label = Latin)) +
+  geom_point() +
+  geom_text_repel(size = 4, fontface = 'italic') +
+  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .25) +
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = .25) +
+  geom_abline(intercept = -0.019, slope = 0.0548, alpha = .4, linetype = "solid") +
+  annotate("text", x = -.35, y = .1, label = "paste(italic(t), \" = 2.15, \", d.f., \" = 28, \",italic(P), \" = 0.0396\")", parse = TRUE) +
+  annotate("text", x = -.35, y = .09, label = "paste(italic(R)^{2}, \" = 0.11\")", parse = TRUE) +
+  xlab("Simulated change in overwinter population growth\nwith 1 std. dev. larger last generation") +
+  ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggsave(filename = "figS5.tif", path = "figures", device='tiff', dpi=600)
+
 

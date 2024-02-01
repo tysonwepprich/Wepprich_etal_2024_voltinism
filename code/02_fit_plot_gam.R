@@ -278,9 +278,9 @@ for (mf in seq_along(modfiles)){
       theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
     theme(legend.position = c(.15, .925))
   gamplt
-  ggsave(filename = "example_gam.tif", path = "figures", device='tiff', dpi=600)
+  ggsave(filename = "fig2A.tif", path = "figures", device='tiff', dpi=600)
   
-  saveRDS(gamplt, file = paste0("figures/species_examples/gam_", latin, ".rds"))
+  # saveRDS(gamplt, file = paste0("figures/species_examples/gam_", latin, ".rds"))
   # ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."), 
          # plot = gamplt, device = "png", path = "figures/species_examples/", width = 8, height = 6, units = "in")
   
@@ -300,7 +300,7 @@ for (mf in seq_along(modfiles)){
     theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
     theme(legend.position = c(.15, .925))
   gamdoyplt
-  ggsave(filename = "example_gamdoy.tif", path = "figures", device='tiff', dpi=600)
+  ggsave(filename = "fig2B.tif", path = "figures", device='tiff', dpi=600)
   
   
   

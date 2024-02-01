@@ -153,8 +153,8 @@ for (sp in 1:nrow(mvspecies)){
     theme(legend.position = "none")
   mmplt
   
-  ggsave(filename = "example_mix.tif", path = "figures", device='tiff', dpi=600)
-  saveRDS(mmplt, file = paste0("figures/species_examples/mix_", latin, ".rds"))
+  ggsave(filename = "fig2C.tif", path = "figures", device='tiff', dpi=600)
+  # saveRDS(mmplt, file = paste0("figures/species_examples/mix_", latin, ".rds"))
   
   # ggsave(filename = paste(tmp$params$CommonName, "mixmod", "GDD", "png", sep = "."),
   #        plot = mmplt, device = "png", path = "gams/plots", width = 8, height = 6, units = "in")

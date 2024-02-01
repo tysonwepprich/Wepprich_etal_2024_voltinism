@@ -1,5 +1,6 @@
 # Large GAM files
 gams/
+figures/
 
 # History files
 .Rhistory

@@ -1,6 +1,3 @@
 This directory is empty in the repository because output files for generalized 
 additive models is too large. Run 02_fit_gam.R to populate this directory. 
 However, fitting GAMs is not necessary to reproduce the main analysis.
-
-The plot directory is also empty, but would be where figures of species
-phenological variation would be save if 03_plot_gam.R were run.

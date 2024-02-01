@@ -1,49 +1,23 @@
 # Metadata
 
-**Directories**
-* *daymet*: Not included, daily temperature min/max rasters for North America. Instructions on how to process these from downloaded netcdf's are in Process_gridded_temperature.R
-* *eobs*: Not included, daily temperature min/max rasters for Europe. Instructions on how to process these from downloaded netcdf's are in Process_gridded_temperature.R
-* *DDRP_results*: 2019 example from Europe included to show annual results (.tif) from DDRP. Analysis for 2010-2019 were used to make maps in the manuscript in 05_map_DDRP_results.R. These results come from analysis performed in 04_DDRP_phenology model.R.
+**Raw data**
+* data.trim.2023.csv: Every monitoring survey with site, date, species, count, duration of survey
+* OHsites2023update.txt: Monitoring site geographic coordinates
+* speciestraits.csv: Species traits and columns for inclusion in this analysis.
+* species_names.csv: Used to match Latin names to common names
+* OHbflyID.csv: Species list used in phylogenetic analysis
+* RAxML_bipartitions.OHbflyBOLD_JRA_cds_aligned.gBlocks.consensus.famsConstrained.nex: Tree used in Wepprich et al. (2019), see paper's [supplement](https://doi.org/10.1371/journal.pone.0216270) for details.
 
-**Experimental data**
-* *dev_exp1.csv*: Development time at constant temperatures
-    * replicate = unique ID for replicate and temperature treatment
-    * time1 = days to complete development
-    * temperature = constant temperature treatment in degrees Celsius.
-* *dev_exp2.csv*: Development time after transfer from low temperature treatments
-    * plant = experimental unit, individuals developing on same plant
-    * run = treatment replicates
-    * time1 = 30 days at low temperature treatment
-    * time2 = days to complete development once transferred to 15C
-    * temperature = initial temperature treatment for 30 days in degrees Celsius.
-    * temp2 = all finished development at 15C
-    * replicate = unique ID for replicate by plant, run, and temperature treatment
-* *dev_myint.csv*: Development times reported from publication
-    * sex = male/female (we grouped together to compare with our experiments)
-    * temperature = constant temperature treatments
-    * n = sample size, number of individuals
-    * mean and se for multiple lifestage development times and total development time
-* *photo_diapause.csv*: Photoperiod-based diapause initiation experiment
-    * Pop = biotype collected in Japan, Kyushu (southern) or Hokkaido (northern)
-    * Treat = photoperiod treatment in hours of daylight
-    * Repro = number of females in treatment reproductive
-    * Diap = number of females in treatment that entered diapause
-    * fraction = proportion reproductive for plotting
-* *springtime_oviposition.csv*: Photoperiod- and temperature-based diapause termination * experiment
-    * Population = biotype collected in Japan, Kyushu (southern) or Hokkaido (northern)
-    * Temperature = constant temperature treatment, 14 or 21C
-    * Photoperiod = photoperiod treatment in hours of daylight
-    * Date = date of observation
-    * AccumDD = accumulated degree-days from start of experiment (LDT 6.9C)
-    * Feeding = observed feeding from individuals in petri dish, lerp on leaf
-    * Mating = observed mating within petri dish,
-    * Dead = number of adults that had died
-    * Eggs_total = number of eggs in petri dish (top and bottom of leaf)
-    * Eggs_top = eggs visible on top of leaf
-    * Eggs_bottom = eggs hidden, counted less frequently
-    * EggAccumStartDate = date when oviposition started
-    * StartCount = number of adults in dish at beginning of experiment
-    * Notes = other observations
+**Intermediate products**
+* daily_weather.rds: daily Daymet weather output from 00_degree_days.R, used in several other scripts.
+* modparams.5.rds: output from 02_fit_plot_gam.R, such as fit and error terms for generalized additive models.
+* mixmodcomparison.rds: output from 03_estimate_abundance_by_generation.R comparing mixture models
+* genpops.rds: output from 03_estimate_abundance_by_generation.R with estimates for each species x site x year x generation
+* covs.rds: weather covariates estimated in 04_prep_model_data.R for each species generation peak date
+* modeling_data.rds: output of 04_prep_model_data.R, data with all covariates used in later scripts
+* species_models.rds: output of 05_species_models.R containing parameters from the various species models
+* pgls_bootstrap.rds: results of running PGLS 1000x with bootstrapped data in 07_voltinism_traits.R
+* pgls_boot.csv: parameters from PGLS with bootstrap data
+* pgls_noboot.csv: parameters from PGLS without data uncertainty accounted for.                            
+                                                              
 
-**Other**
-* *na_lines.rds*: Boundaries for North America for maps, including both states and provinces.

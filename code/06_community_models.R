@@ -1,6 +1,6 @@
 ## Header ---------------------------
 ## Script name: 06_community_models.R
-## Purpose of script: 
+## Purpose of script: Main analysis of community models (last generation size, overwinter growth rate)
 ## Author: Tyson Wepprich
 ## Date Created: 2024-01-22
 ## License: CC0 1.0 Universal
@@ -74,7 +74,7 @@ anova(final)
 summary(final)
 
 
-# Fig S3: Last generation response (community model) ----
+# Fig S2: Last generation response (community model) ----
 pltdat <- ggpredict(mod_lam, c("zordann", "zordsite[-.23,.23]", "zordspec[-1,1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Peak date annual variation", "Site mean phenology", "Species mean phenology")
@@ -97,10 +97,10 @@ pltdat <- plot(pltdat) +
   theme(legend.position = c(.125, .85)) +
   guides(color=guide_legend(title="Mean site\npeak date"))
 pltdat
-ggsave(filename = "figS3.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS2.tif", path = "figures", device='tiff', dpi=600)
 
 
-# Table S2 in Supplement ----
+# Table S1 in Supplement ----
 tab_model(null_lam, mod_lam, show.se = TRUE, show.ci = FALSE, show.icc = FALSE, 
           show.stat = TRUE, digits = 3, digits.re = 3)
 
@@ -125,7 +125,7 @@ final <- get_model(step_res)
 anova(final)
 summary(final)
 
-# Table S3 in Supplement ----
+# Table S2 in Supplement ----
 tab_model(null_ow, final,  show.se = TRUE, show.ci = FALSE, show.icc = FALSE, 
           show.stat = TRUE, digits = 3, digits.re = 3)
 
@@ -197,7 +197,7 @@ ggarrange(pltdat1, pltdat2, pltdat3, ncol = 1, labels = NULL, common.legend = FA
 ggsave(filename = "fig3.tif", path = "figures", device='tiff', dpi=600)
 
 
-# Fig S4: Frost x temperature -----
+# Fig S3: Frost x temperature -----
 pltdat <- ggpredict(final, c("zlastann[-3:3]", "zwinterann[-1,1]", "zfrostann[-1,1]", "zordspec[-1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Last generation size", "Winter temperature", "Frost onset", "Species season")
@@ -228,6 +228,6 @@ pltdat2 <- plot(pltdat) +
   guides(color=guide_legend(title="Annual\nwinter\ntemperature"))
 
 ggarrange(pltdat1, pltdat2, ncol = 1, labels = NULL, common.legend = TRUE, legend = "right")
-ggsave(filename = "figS4.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS3.tif", path = "figures", device='tiff', dpi=600)
 
 

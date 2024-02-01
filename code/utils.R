@@ -6,9 +6,6 @@
 ## License: CC0 1.0 Universal
 ## Email: tyson.wepprich@gmail.com
 ## ---
-## Notes: 
-## 
-## ---
 
 # From Forsythe et al. 1995 doi: 10.1016/0304-3800(94)00034-F
 photoperiod <- function(lat, doy, p = 1.5){

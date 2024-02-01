@@ -197,7 +197,7 @@ saveRDS(moddat, "data/modeling_data.rds")
 # 
 # 
 
-# Figure 2D ----
+# Fig 2D ----
 # example species
 lgvar <- moddat %>%
   filter(CommonName == "Pearl Crescent", year %in% c(2008:2017), YearTotal >= 50, nyr >= 15, photo > 12.2) %>%
@@ -218,9 +218,9 @@ lgvarplt <- ggplot(data = lgvar, aes(x = photo,
     x = "Day length at penultimate peak",
     y = "Last generation size",
     title = NULL)
-# lgvarplt
+lgvarplt
 
-# ggsave(filename = "example_lgvar.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "Fig2D.tif", path = "figures", device='tiff', dpi=600)
 
 
 
