@@ -9,11 +9,17 @@
 ## Notes: 
 ## 
 ## ---
+source('code/01_data_prep.R')
 
-# Zuur model selection
-# using moddat/test data from 07_last_generation_size.R
-require(lmerTest)
+library(lme4)
+library(merTools)
+library(lmerTest) # lmer and step functions masked
+library(ggeffects)
+library(broom)
+library(broom.mixed)
 library(ggpubr)
+library(sjPlot)
+moddat <- readRDS("data/modeling_data.rds")
 
 test <- moddat %>% 
   ungroup() %>% 
@@ -48,89 +54,28 @@ test <- moddat %>%
          zwintersite = mean(zwinter, na.rm = TRUE),
          zwinterann = zwinter - mean(zwinter, na.rm = TRUE))
 
-# 1. Beyond optimal model with all fixed effects
-# 2. Fit increasing random effects complexity with REML
-# 3. Compare nested fixed effects models with ML
-# 4. Present final model with REML
-modfixed <- glm(response ~ zdensann + (zyear + zordspec + zordsite + zordann)^3 + offset(off), family = poisson(link = "log"), data = test)
 
-
-# is there a difference in estimates from glmer vs lmer? glmer is slower at fitting models but includes count size info
-# results clearer with lmer interactions graphs
-
-mod1 <- glmer(response ~ (zdensann + zyear + zordspec + zordsite + zordann)^2 + offset(off) + 
-                # (1|SiteID) + (1|Year) +
-                # (1 + (zyear + zdensann + zordsite + zordann)^2| CommonName) + 
-                (1|CommonName) +
-                (1|SiteID:CommonName) +
-                (1|SpSiteYr),
-              family = poisson(link = "log"), data = test, 
-              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
+# Last generation size model ----
 null_lam <- lmer(lastloglambda ~ zdensann + zyear + 
                    (1|CommonName) +
                    (1|SiteID:CommonName),
                  data = test, 
                  control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
 
-mod_lam1 <- lmer(lastloglambda ~ zdensann + zyear + (zordspec + zordsite + zordann)^3 + 
-                   # (1|SiteID) +
-                   # (1|Year) +
-                   # (1 + zdensann + zyear + zordsite + zordann| CommonName) +
-                   (1|CommonName) +
-                   (1|SiteID:CommonName),
-                 data = test, 
-                 control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-mod_lam2 <- lmer(lastloglambda ~ (zdensann + zyear + zordspec + zordsite + zordann)^2 + 
-                   # (1|SiteID) +
-                   # (1|Year) +
-                   # (1 + zdensann + zyear + zordsite + zordann| CommonName) +
-                   (1|CommonName) +
-                   (1|SiteID:CommonName),
-                 data = test, 
-                 control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-# photoperiod does worse than ordinal date! still!
-# mod_lam2_photo <- lmer(lastloglambda ~ (zdensann + zyear + zphotospec + zphotosite + zphotoann)^3 + 
-#                    # (1|SiteID) +
-#                    # (1|Year) +
-#                    # (1 + zdensann + zyear + zordsite + zordann| CommonName) +
-#                    (1|CommonName) +
-#                    (1|SiteID:CommonName),
-#                  data = test, 
-#                  control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-# this seems most in line with Gelman & Hill interaction with group-level predictor (zordspec)
-mod_lam3 <- lmer(lastloglambda ~ zdensann + zyear + zordspec * (zordsite + zordann + zordsite:zordann) + 
-                   (1|SiteID) +
-                   # (1|Year) +
-                   # (1 + zdensann + zyear + zordsite + zordann + zordsite:zordann| CommonName) +
-                   (1|CommonName),
-                 # (1|SiteID:CommonName),
-                 data = test, 
-                 control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-saveRDS(mod_lam3, "LGmod_varyingslopes.rds")
-
-mod_lam3a <- lmer(lastloglambda ~ zdensann + zyear + zordspec * (zordsite + zordann + zordsite:zordann) + 
-                    # (1|SiteID) +
-                    # (1|Year) +
-                    # (1 + zdensann + zyear + zordsite + zordann + zordsite:zordann| CommonName) +
+mod_lam <- lmer(lastloglambda ~ zdensann + zyear + zordspec * (zordsite + zordann + zordsite:zordann) + 
                     (1|CommonName) +
                     (1|SiteID:CommonName),
                   data = test, 
                   control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
 
-saveRDS(mod_lam3a, "LGmod_varyingintcs.rds")
-mod_lam3a <- readRDS("LGmod_varyingintcs.rds")
-
-(step_res <- step(mod_lam3))
+(step_res <- step(mod_lam))
 final <- get_model(step_res)
 anova(final)
 summary(final)
 
-pltdat <- ggpredict(mod_lam3a, c("zordann", "zordsite[-.23,.23]", "zordspec[-1,1]")) 
+
+# Fig S3: Last generation response (community model) ----
+pltdat <- ggpredict(mod_lam, c("zordann", "zordsite[-.23,.23]", "zordspec[-1,1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Peak date annual variation", "Site mean phenology", "Species mean phenology")
 
@@ -140,165 +85,120 @@ attr(pltdat, "terms") <- c("Peak date annual variation", "Site mean phenology", 
 # 1 SD in scaled zordann is also approximately 7 days (.235 * 30)
 
 
-plot(pltdat) + 
+pltdat <- plot(pltdat) + 
   labs(
     x = "Penultimate generation peak date (annual variation)",
     y = "Last generation size\n(population growth from penultimate generation)",
     title = NULL) +
+  scale_colour_brewer(name = "Site mean\npeak date", palette = "Set1", labels = c("-1 SD (earlier)", "+1 SD (later)")) +
+  scale_fill_brewer(palette = "Set1") +
   theme_bw(base_size = 18) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
+  theme(legend.position = c(.125, .85)) +
   guides(color=guide_legend(title="Mean site\npeak date"))
+pltdat
+ggsave(filename = "figS3.tif", path = "figures", device='tiff', dpi=600)
 
 
+# Table S2 in Supplement ----
+tab_model(null_lam, mod_lam, show.se = TRUE, show.ci = FALSE, show.icc = FALSE, 
+          show.stat = TRUE, digits = 3, digits.re = 3)
 
 
-tab_model(null_lam, mod_lam3a)
-
-
-mod_lam5 <- lmer(lastloglambda ~ zyear + (zdensann + zordspec + zordsite + zordann)^3 + 
-                   # (1|SiteID) +
-                   # (1|Year) +
-                   (1 + zyear + (zdensann + zordsite + zordann)^2| CommonName) +
-                   # (1|CommonName) +
-                   (1|SiteID:CommonName),
-                 data = test, 
-                 control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-AIC(mod_lam3, mod_lam4, mod_lam5)
-
-
-# OW lambda
+# Overwinter growth rate model ----
 test <- test[-which(is.na(test$zwinterann)),]
 test <- test[-which(is.na(test$ow_lam)),]
-
-mod2d <- lmer(ow_lam ~ (zordspec + zlastann + zdensann + zlastsite + zfrostann + zwinterann)^2 + 
-                # (1 + zlastann * (zdensann + zlastsite + zfrostann + zwinterann) | CommonName) +
-                (1|CommonName) + 
-                (1|SiteID:CommonName), 
-              data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-ggpredict(mod2d, c("zlastann", "zlastsite", "zfrostann", "zordspec")) %>% plot()
-
-
-# quadratic effects for winter not exciting, but possible valley for zlastann that only adds .003 to the R2 when quadratic w/ interactions
-
-# test <- test %>% filter(uniqSY >= 40 & uniqSYlam >= 100) # filter from 34 to 18 species
 
 null_ow <- lmer(ow_lam ~ zdensann + zyear + 
                   (1|CommonName) +
                   (1|SiteID:CommonName), 
                 data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-# 
-# 
-# mod2d <- lmer(ow_lam ~ zdensann + zyear + (zordspec + poly(zlastann,2) + zlastsite + zfrostann + zwinterann)^2 + 
-#                 # (1 + zlastann * (zdensann + zlastsite + zfrostann + zwinterann) | CommonName) +
-#                 (1|CommonName) + 
-#                 (1|SiteID:CommonName), 
-#               data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-# 
-# ow <- lmer(ow_lam ~ zdensann + zyear + (zordspec + zlastann + zlastsite + zfrostann + zwinterann) + 
-#                 # (1 + zlastann * (zdensann + zlastsite + zfrostann + zwinterann) | CommonName) +
-#                 (1|CommonName) + 
-#                 (1|SiteID:CommonName), 
-#               data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-# 
-# ow2 <- lmer(ow_lam ~ zdensann + zyear + (zlastann + zlastsite + zfrostann + zwinterann)^2 + 
-#              # (1 + zlastann * (zdensann + zlastsite + zfrostann + zwinterann) | CommonName) +
-#              (1|CommonName) + 
-#              (1|SiteID:CommonName), 
-#            data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-# 
-# ow2a <- lmer(ow_lam ~ zdensann + zyear + (zordspec + zlastann + zlastsite + zfrostann + zwinterann)^2 +
-#                (1 + zdensann + zyear + zlastann + zlastsite + zfrostann + zwinterann | CommonName) +
-#                # (1|CommonName) + 
-#                (1|SiteID:CommonName), 
-#              data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
 
-ow2b<- lmer(ow_lam ~ zdensann + zyear + zordspec * (zlastann + zlastsite + zfrostann + zwinterann)^2 + 
-              # (1 + zdensann + zyear + (zlastann + zlastsite + zfrostann + zwinterann)^2 | CommonName) +
+
+mod_ow <- lmer(ow_lam ~ zdensann + zyear + zordspec * (zlastann + zlastsite + zfrostann + zwinterann)^2 + 
               (1|CommonName) +
               (1|SiteID:CommonName), 
             data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e7)))
 
-
-step_res <- step(ow2b, alpha.fixed = .1)
+step_res <- step(mod_ow, alpha.fixed = .1)
 final <- get_model(step_res)
 anova(final)
 summary(final)
 
+# Table S3 in Supplement ----
+tab_model(null_ow, final,  show.se = TRUE, show.ci = FALSE, show.icc = FALSE, 
+          show.stat = TRUE, digits = 3, digits.re = 3)
 
-# SD zlastann = .92
-# SD zlastsite = .99
-# SD zordspec = .94
-# SD zwinterann = .94
-# SD zfrostann = .83
-
-
-
-ggpredict(final, c("zlastann", "zlastsite", "zwinterann", "zordspec")) %>% plot()
-ggpredict(final, c("zlastann", "zlastsite", "zfrostann", "zordspec")) %>% plot()
-ggpredict(final, c("zlastann", "zwinterann", "zfrostann", "zordspec")) %>% plot()
-ggpredict(final, terms = c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-.8,.8]", "zordspec[-1,1]")) %>% plot()
+# ggpredict(final, c("zlastann", "zlastsite", "zwinterann", "zordspec")) %>% plot()
+# ggpredict(final, c("zlastann", "zlastsite", "zfrostann", "zordspec")) %>% plot()
+# ggpredict(final, c("zlastann", "zwinterann", "zfrostann", "zordspec")) %>% plot()
+# ggpredict(final, terms = c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-.8,.8]", "zordspec[-1,1]")) %>% plot()
 
 
-pltdat <- ggpredict(mod_lam3a, c("zordann", "zordsite[-.23,.23]", "zordspec[-1,1]")) 
-# change attributes so facets labeled (3rd one only?)
-attr(pltdat, "terms") <- c("Peak date annual variation", "Site mean phenology", "Species mean phenology")
-
-
-tab_model(null_ow, final)
-
+# Fig 3: Overwinter interactions (community model) ----
 # 2 panels to save together Figure 3
-pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-.8,.8]", "zordspec[-1]")) 
+pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-1,1]", "zordspec[-1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Last generation size", "Site mean last generation size", "Winter temperature", "Species season")
 
 pltdat1 <- plot(pltdat) + 
   scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD (cooler)", "+1 SD (warmer)")) +
   scale_fill_brewer(palette = "Set1", direction = -1) +
-  # scale_y_continuous(limits=c(-2,1), expand = expansion(mult = c(0, 0))) +
-  labs(title = "Earlier season species", x = "", y = "") +
+  scale_y_continuous(limits = c(-1.85, .6), breaks = c(-1.5, -1.0, -0.5, 0, 0.5)) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
+  labs(title = NULL, x = NULL, y = "") +
+  annotate("text", x = -1.72, y = .38, label = "Earlier species\nJuly 2 peak", size = 5) +
   theme_bw(base_size = 16) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
-  guides(color=guide_legend(title="Mean site\nlast generation\nsize"))
+  theme(legend.position = c(.2, .2)) +
+  guides(color=guide_legend(title="Site mean LG size"))
+# pltdat1
 
-pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-.8,.8]", "zordspec[0]")) 
+pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-1,1]", "zordspec[0]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Last generation size", "Site mean last generation size", "Winter temperature", "Species season")
 
 pltdat2 <- plot(pltdat) + 
   scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD (cooler)", "+1 SD (warmer)")) +
   scale_fill_brewer(palette = "Set1", direction = -1) +
-  # scale_y_continuous(limits=c(-2,1), expand = expansion(mult = c(0, 0))) +
-  labs(title = "Mid season species",
-       x = "",
+  scale_y_continuous(limits = c(-1.85, .6), breaks = c(-1.5, -1.0, -0.5, 0, 0.5)) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
+  labs(title = NULL,
+       x = NULL,
        y = "Overwinter growth rate") +
+  annotate("text", x = -1.72, y = .38, label = "Mid species\nAugust 1 peak", size = 5) +
   theme_bw(base_size = 16) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
-  guides(color=guide_legend(title="Mean site\nlast generation\nsize"))
+  theme(legend.position = "none") +
+  guides(color=guide_legend(title="Site mean\nLG size"))
+# pltdat2
 
-pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-.8,.8]", "zordspec[1]")) 
+pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-1,1]", "zordspec[1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Last generation size", "Site mean last generation size", "Winter temperature", "Species season")
 
 pltdat3 <- plot(pltdat) + 
+  scale_y_continuous(limits = c(-1.85, .6), breaks = c(-1.5, -1.0, -0.5, 0, 0.5)) +
   scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD (cooler)", "+1 SD (warmer)")) +
   scale_fill_brewer(palette = "Set1", direction = -1) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
   # scale_y_continuous(limits=c(-2,1), expand = expansion(mult = c(0, 0))) +
-  labs(title = "Later season species",
-       x = "Last generation size (annual variation)",
+  labs(title = NULL,
+       x = NULL,
        y = "") +
+  annotate("text", x = -1.72, y = .38, label = "Later species\nAugust 31 peak", size = 5) +
   theme_bw(base_size = 16) +
+  theme(legend.position = "none") +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
-  guides(color=guide_legend(title="Mean site\nlast generation\nsize"))
+  guides(color=guide_legend(title="Site mean\nLG size"))
+# pltdat3
+
+ggarrange(pltdat1, pltdat2, pltdat3, ncol = 1, labels = NULL, common.legend = FALSE)
+ggsave(filename = "fig3.tif", path = "figures", device='tiff', dpi=600)
 
 
-ggarrange(pltdat1, pltdat2, pltdat3, ncol = 1, labels = NULL, common.legend = TRUE, legend = "right")
-
-
-# Frost x winter 2 panel
-# 2 panels to save together Figure 3
-pltdat <- ggpredict(final, c("zlastann[-3:3]", "zwinterann[-.95,.93]", "zfrostann[-.8,.8]", "zordspec[-1]")) 
+# Fig S4: Frost x temperature -----
+pltdat <- ggpredict(final, c("zlastann[-3:3]", "zwinterann[-1,1]", "zfrostann[-1,1]", "zordspec[-1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Last generation size", "Winter temperature", "Frost onset", "Species season")
 
@@ -312,7 +212,7 @@ pltdat1 <- plot(pltdat) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
   guides(color=guide_legend(title="Annual\nwinter\ntemperature"))
 
-pltdat <- ggpredict(final, c("zlastann[-3:3]", "zwinterann[-.95,.93]", "zfrostann[-.8,.8]", "zordspec[1]")) 
+pltdat <- ggpredict(final, c("zlastann[-3:3]", "zwinterann[-1,1]", "zfrostann[-1,1]", "zordspec[1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Last generation size", "Winter temperature", "Frost onset", "Species season")
 
@@ -328,50 +228,6 @@ pltdat2 <- plot(pltdat) +
   guides(color=guide_legend(title="Annual\nwinter\ntemperature"))
 
 ggarrange(pltdat1, pltdat2, ncol = 1, labels = NULL, common.legend = TRUE, legend = "right")
+ggsave(filename = "figS4.tif", path = "figures", device='tiff', dpi=600)
 
-
-
-
-
-# something like this might be best model, including 1 winter var at a time
-# without varying slopes by species, will rely on species models to show variation
-# seems like early season species have no impact of frost, but "trap" of larger LG only exists later in season and at colder sites.
-ow3 <- lmer(ow_lam ~ zdensann + zyear + (zlastann + zlastsite + zfrostann + zwinterann)^3 + 
-              # (1 + zlastann * (zdensann + zlastsite + zfrostann + zwinterann) | CommonName) +
-              (1|CommonName) + 
-              (1|SiteID:CommonName), 
-            data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-ow3b <- lmer(ow_lam ~ zdensann + zyear + zordspec * (zlastann + zlastsite + zfrostann + zwinterann)^3 -zordspec:zlastann:zfrostann:zwinterann -
-               zlastann:zfrostann:zwinterann -zordspec:zlastann:zlastsite:zfrostann - zlastann:zlastsite:zfrostann - zordspec:zlastsite:zfrostann:zwinterann -
-               zordspec:zfrostann:zwinterann - zordspec:zlastsite:zfrostann -zordspec:zlastann:zlastsite:zwinterann - zordspec:zlastann:zlastsite -
-               zordspec:zlastsite:zwinterann - zlastsite:zfrostann:zwinterann - zlastsite:zfrostann+ 
-               # (1 + zlastann * (zdensann + zlastsite + zfrostann + zwinterann) | CommonName) +
-               (1|CommonName) + 
-               (1|SiteID:CommonName), 
-             data = test, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-# running into singularity issues when trying varying intercepts by species
-# tried filtering rarer species, or reducing fixed effects (-zyear, one winter var at a time)
-# not working out, but wanted to do it to match LG-lam models
-#
-ow2a<- lmer(ow_lam ~ zdensann + zyear + zordspec * (zlastann + zlastsite + zfrostann)^2 + 
-              # (1 + zdensann + zyear + zlastann + zlastsite | CommonName) +
-              (1|CommonName) +
-              (1|SiteID), 
-            data = test, REML = TRUE, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-ow2b <- lmer(ow_lam ~ zdensann + zordspec * (zlastann + zlastsite + zfrostann)^2 + 
-               (1 + zdensann + (zlastann + zlastsite + zfrostann)^2   | CommonName) +
-               # (1|CommonName) +
-               (1|Year) +
-               (1|SiteID), 
-             data = test, REML = TRUE, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
-
-
-
-# trying to visualize differences between species
-aaa <- test %>% ungroup %>% select(CommonName, zlastspec, zordspec) %>% distinct()
-plot(aaa[,3:2])
-text(aaa$zordspec, aaa$zlastspec, labels=aaa$CommonName)
 

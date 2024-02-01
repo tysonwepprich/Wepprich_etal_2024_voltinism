@@ -7,6 +7,7 @@
 ## Email: tyson.wepprich@gmail.com
 ## ---
 ## Notes: 
+## This script is sourced by others
 ## Volunteers organized by the Ohio Lepidopterists have contributed these observations
 ## They ask that the data be used for research and that the group be acknowledged in publications
 ## https://www.ohiolepidopterists.org/
@@ -29,7 +30,7 @@ theme_set(theme_bw(base_size = 18))
 # Load data ----
 data <- readr::read_csv("data/data.trim.2023.csv") %>% 
   mutate(SiteID = formatC(SiteID.x, width = 3, format = "d", flag = "0"),
-         SiteDate = lubridate::ymd(SiteDate))
+         SiteDate = lubridate::mdy(SiteDate))
 
 # Two cryptic species are not distinguished in the monitoring
 data$CommonName[which(data$CommonName == "Spring/Summer Azure")] <- "Azures"
@@ -41,7 +42,7 @@ data <- data %>%
 # Filter out unidentified species
 allspecies <- data %>% 
   filter(CommonName %in% unique(CommonName)[1:123]) %>% 
-  group_by(CommonName, CombinedLatin) %>% 
+  group_by(CommonName) %>% 
   summarise(n = sum(Total)) %>% 
   arrange(n)
 
@@ -98,7 +99,7 @@ siteGDD <- gdd_all %>%
 
 # many ways to cluster sites, but using lat/lon is simplest 
 # wanted 4 regions for plotting simplicity
-sitemod <- densityMclust(siteGDD[,c(2,3)], G = 1:4, modelNames = "EVV")
+sitemod <- densityMclust(siteGDD[,c(2,3)], G = 1:4, modelNames = "EVV", plot = FALSE)
 siteGDD$region <- as.character(sitemod$classification)
 
 # # visualize regional clusters, imagine an Ohio outline

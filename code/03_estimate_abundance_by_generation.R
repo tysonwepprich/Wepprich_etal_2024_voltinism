@@ -7,19 +7,20 @@
 ## Email: tyson.wepprich@gmail.com
 ## ---
 ## Notes: 
-## 
+## Running this script is not necessary to reproduce the main results, because
+## output of this script is saved as "data/genpops.rds", which is used in subsequent scripts.
+## You would need to run 02_fit_plot_gam.R to get required input for these mixture models
 ## ---
 
-source('01_data_prep.R')
+source('code/01_data_prep.R')
 
+# Candidate species ----
 # 42 candidate species for mixture models, not all will work (mv_analysis == 1)
-# After species filter (1st pass with mixture models) 35 remain (final_mv_analysis == 1)
+# After species filter (mixture models work/sample size sufficient) 30 remain (final_mv_analysis == 1)
 mvspecies <- read.csv("data/speciestraits.csv", header = TRUE) %>%
   # filter(mv_analysis == 1) %>%
   filter(final_mv_analysis == 1) %>%
   droplevels.data.frame()
-
-
 
 modfiles <- list.files("gams", full.names = TRUE)
 modfiles <- modfiles[grep(pattern = "final", x = modfiles, fixed = TRUE)]
@@ -31,14 +32,14 @@ for (sp in 1:nrow(mvspecies)){
   minvolt <- mvspecies$MinVoltMM[sp]
   maxvolt <- mvspecies$Voltinism[sp]
   
-  # import GAM phenology model and count data used for it
+  # Import GAM phenology model ---- 
+  # and the count data used to fit it
   mf <- modfiles[grep(pattern = species, x = modfiles, fixed = TRUE)]
   tmp <- readRDS(mf)
   mod <- tmp$gammod
   dat <- tmp$datGAM
   
-  # find missing weeks to impute
-  
+  # Impute missing surveys ----
   surv <- dat %>% 
     dplyr::select(SiteID, Week, Year, SiteYear) %>% 
     distinct()
@@ -52,7 +53,7 @@ for (sp in 1:nrow(mvspecies)){
   impute_days <- expand.grid(Year = unique(missing$Year), Week = c(1:30)) %>% 
     mutate(DOY = ifelse(as.numeric(as.character(Year)) %% 4 == 0, 92 + Week * 7 - 4, 91 + Week * 7 - 4)) # midweek to impute
   
-  # Predict missing weeks. Better to round to whole number or simulate from GAM's negbinom distribution?
+  # Predict missing weeks.
   missing <- missing %>% 
     left_join(impute_days) %>% 
     mutate(SiteDate = as.Date(paste(DOY, Year, sep = "-"), format = "%j-%Y")) %>% 
@@ -67,7 +68,8 @@ for (sp in 1:nrow(mvspecies)){
     bind_rows(missing) %>%
     mutate(CommonName = species)
   
-  # Mclust docs: what's the uncertainty measure? Could be good way to compare DOY/GDD and regional split
+  # Mixture models with mclust package
+  # compare 3 timescales: degree day, ordinal day, and degree day with log(counts)
   dd_dist <- rep(alldat$accumdegday, round(alldat$Total))
   dd_doy <- rep(alldat$DOY, round(alldat$Total))
   dd_log <- rep(alldat$accumdegday, round(log(alldat$Total + 1)))
@@ -75,9 +77,6 @@ for (sp in 1:nrow(mvspecies)){
   mm <- Mclust(dd_dist, G = minvolt:maxvolt, modelNames = "E")
   mm_doy <- Mclust(dd_doy, G = minvolt:maxvolt, modelNames = "E")
   mm_log <- Mclust(dd_log, G = minvolt:maxvolt, modelNames = "E")
-  # mm2 <- Mclust(cbind(dd_dist, dd_doy), G = minvolt:maxvolt)
-  
- 
   
   # test doy vs gdd
   # constraining to equal variance here, but could try unequal for more realism
@@ -92,16 +91,16 @@ for (sp in 1:nrow(mvspecies)){
                       time = "gdd_log", uncertainty = mean(mm_log$uncertainty))
   splist[[sp]] <- bind_rows(mmdf, mmdf2, mmdf3)
   
-  # CHECK THAT PREDICTIONS MAKE SENSE
+  # check predictions
   if(mmdf$uncertainty[1]<mmdf3$uncertainty[1] & length(mm$parameters$mean)>1){
     mm <- Mclust(dd_dist, G = minvolt:maxvolt, modelNames = "E")
   }else{
     mm <- Mclust(dd_log, G = minvolt:maxvolt, modelNames = "E")
   }
   
- # assigning generation
-  # avoiding rounding so that GAM predictions multiplied by mixed model generation probabilities
-  # each count split same way each time
+ # assigning generation ----
+ # avoiding rounding so GAM predictions are multiplied by mixed model generation probabilities
+ # each count split
   dat <- alldat %>% 
     group_by(SiteYear) %>% 
     mutate(YearTotal = sum(Total[which(datatype == "observed")]),
@@ -122,25 +121,45 @@ for (sp in 1:nrow(mvspecies)){
   
   dat3$GenTotal <- round(dat3$GenTotal, digits = 3)
   
-  ###################
+ # Plot mixture model results by region ----  
+  # name for figures
+  latin <- read.csv("data/species_names.csv") %>% 
+    dplyr::select(CommonName, Genus, Species) %>%
+    filter(CommonName == tmp$params$CommonName) %>% 
+    mutate(Latin = paste(Genus, Species, sep = " ")) %>% 
+    pull(Latin) %>% 
+    as.character()
   
   
-  dat3$region <- factor(dat3$region, levels = c("NW", "NE", "SW", "CN"))
+  dat4 <- dat3 %>% 
+    ungroup() %>% 
+    filter(GenTotal >= 1, Year %in% c(2008:2017)) %>% 
+    mutate(yrgroup = ifelse(Year %in% c(2010, 2011, 2012, 2016, 2017), "Warm years", "Cool years"),
+           sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites"))   
   
-  mmplt <- ggplot(dat3 %>% filter(GenTotal>0), aes(x = accumdegday, y = GenTotal, color = as.factor(gen), shape = datatype)) +
-    geom_point(alpha = .2) +
-    scale_color_brewer(type = "qual", palette = "Dark2") +
-    facet_wrap(.~region, scales = "free_y") +
-    ggtitle(paste0(tmp$params$CommonName, " (", tmp$params$CombinedLatin, ")"),
-            subtitle = "voltinism mixture model on degree-day scale") +
+  mmplt <- ggplot(dat4, aes(x = accumdegday, y = GenTotal, color = as.factor(gen))) +
+    geom_point(alpha = .1) +
+    scale_y_continuous(limits = c(0, 190), expand = c(0,0), breaks = c(0, 50, 100, 150)) +
+    scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .1))) +
+    scale_color_brewer(name = NULL, type = "qual", palette = "Dark2") +
+    facet_grid(sitegroup~yrgroup, scales = "free_y") +
+    # facet_wrap(sitegroup~yrgroup, scales = "free_y") +
+    # ggtitle(paste0(tmp$params$CommonName, " (", tmp$params$CombinedLatin, ")"),
+    #         subtitle = "voltinism mixture model on degree-day scale") +
     labs(color = "Generation") +
-    labs(x = "Degree-days accumulated (5/30C thresholds)") +
-    labs(y = "Observed or imputed count")
-  # mmplt
-  ggsave(filename = paste(tmp$params$CommonName, "mixmod", "GDD", "png", sep = "."),
-         plot = mmplt, device = "png", path = "gams/plots", width = 8, height = 6, units = "in")
+    labs(x = "Degree-days accumulated (5/30°C thresholds)") +
+    labs(y = "Observed or imputed weekly count") +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+    theme(legend.position = "none")
+  mmplt
   
+  ggsave(filename = "example_mix.tif", path = "figures", device='tiff', dpi=600)
+  saveRDS(mmplt, file = paste0("figures/species_examples/mix_", latin, ".rds"))
   
+  # ggsave(filename = paste(tmp$params$CommonName, "mixmod", "GDD", "png", sep = "."),
+  #        plot = mmplt, device = "png", path = "gams/plots", width = 8, height = 6, units = "in")
+  
+  # Abundance and phenology by generation ----
   # using GenTotal from dat3, estimate phenology/abundance for each Site/Year/Gen
   
   dat3 <- dat3 %>% 
@@ -173,58 +192,10 @@ for (sp in 1:nrow(mvspecies)){
   
 } # close species loop
 
-#mixmod results
+# mixmod results
 df <- bind_rows(splist)
-#population estimates by generation
+# population estimates by generation
 df2 <- bind_rows(datlist)
 
-saveRDS(df, "mixmodcomparison.rds")
-saveRDS(df2, "genpops.rds")
-
-
-# # added ETB
-# df <- readRDS("mixmodcomparison.rds")
-# df <- bind_rows(df, splist[[13]])
-# saveRDS(df, "mixmodcomparison.rds")
-# df2 <- readRDS("genpops.rds")
-# df2 <- bind_rows(df2, datlist[[13]])
-# saveRDS(df2, "genpops.rds")
-
-# this code was to visualize GDD vs DOY comparison
-# df2 <- df %>% 
-#   group_by(species) %>%
-#   arrange(time) %>% 
-#   summarise(maxgen = max(gen),
-#             unratio = uncertainty[1] / uncertainty[length(uncertainty)])
-# 
-# df2 <- df %>% 
-#   pivot_wider(id_cols = c(species, gen), names_from = time, values_from = prop)
-# 
-# ggplot(df2, aes(x = gdd, y = doy, color = as.factor(gen))) +
-#   geom_point(size = 3) +
-#   geom_abline(slope = 1, intercept = 0) +
-#   facet_wrap(~species)
-
-
-# Remove some species from analysis, looking at GAMs and mix models
-# App Brown (uni), 
-# Azures (multispecies), 
-# Clouded Sulphur (end of season),
-# Dun Skipper (iftner says 3 broods?), 
-# ETB (too blended)
-# ETS (3rd maybe not there, <10% in GDD mixmid), 
-# Gray HS (3-4 iftner, all mixmod miss early 1st generation),
-# Monarch (but try on the side), 
-
-# Check
-# Common Sooty (only 2 in DOY mixmod, 3 in GDD mixmod & GAM)
-# Euro Skip (2nd maybe not there, <7% in GDD Log mixmod), 
-# Silvery Check (should have 2 not 3 gens, adjust maxgen?),
-# WIDW (should be 3, GDD mixmod selected 2 bc missed small 1st gen, LOG mixmod correct, GAM obviously 3)
-
-# 2nd filter problems, solved by using gdd_log mixmod!
-# Common Sooty wrong peaks selected in mixmod
-# Euroskip double 1st gen selected
-# Viceroy should be 3 gen (2 selected)
-# WIDW (catches 1st gen if regionally stratified)
-
+saveRDS(df, "data/mixmodcomparison.rds")
+saveRDS(df2, "data/genpops.rds")

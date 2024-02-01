@@ -7,6 +7,7 @@
 ## Email: tyson.wepprich@gmail.com
 ## ---
 ## Notes: 
+## Not necessary to run this script, as output saved in data/daily_weather.rds
 ## Calculate daily degree-days with 5C/30C thresholds
 ## Calculate photoperiod for each day
 ## Calculate days with hard frosts (<=-2C)

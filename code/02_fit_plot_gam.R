@@ -1,6 +1,6 @@
 ## Header ---------------------------
 ## Script name: 02_fit_plot_gam.R
-## Purpose of script: Fit seasonal phenological models using mgcv
+## Purpose of script: Fit seasonal phenological models using generalized additive models
 ## Author: Tyson Wepprich
 ## Date Created: 2024-01-22
 ## License: CC0 1.0 Universal
@@ -8,9 +8,10 @@
 ## ---
 ## Notes: 
 ## GAM formula is same as Wepprich et al. (2019) https://doi.org/10.1371/journal.pone.0216270
-## Output is too big to save in repository (up to 900 MB)
-## Fitting models takes a long time
-## Running this script is not necessary to reproduce the main results
+## Output is too big to save in repository (each species file up to 900 MB)
+## Fitting models for 30 species takes 45 minutes on a 8-core 32GB-RAM laptop
+## Running this script is not necessary to reproduce the main results, but would
+## be required to run 03_estimate_abundance_by_generation.R to fit mixture models with GAM-imputed counts
 ## ---
 
 source('code/01_data_prep.R')
@@ -20,9 +21,15 @@ source('code/01_data_prep.R')
 # Also will plot seasonal phenological patterns in different regions/years
 
 # Select species, as is it will attempt to fit models for 100+ species
-# run examples species only (Phyciodes tharos) for Fig 2
-allspecies <- allspecies[which(allspecies$CommonName == "Pearl Crescent"), ]
 
+# run examples species only (Phyciodes tharos) for Fig 2 or all 30 species
+allspecies <- allspecies[which(allspecies$CommonName == "Pearl Crescent"), ]
+# allspecies <- read.csv("data/speciestraits.csv") %>% 
+  # filter(final_mv_analysis == 1) %>% 
+  # dplyr::select(CommonName, final_mv_analysis)
+
+
+system.time({
 # Fit GAM ----
 # use parallel processing to fit GAMs for each species
 # results in large files saved
@@ -196,7 +203,7 @@ outfiles <- foreach(sp = 1:nrow(allspecies),
 if(.Platform$OS.type == "windows"){
   stopCluster(cl)
 }
-
+})
 
 # Plot GAM ----
 # Plot seasonal phenological variation from species GAM
@@ -220,11 +227,12 @@ for (mf in seq_along(modfiles)){
   counts <- tmp$datGAM
   sp_params[[mf]] <- tmp$params
   
-  
-  latin <- allspecies %>% 
-    ungroup() %>% 
+  # name for figures
+  latin <- read.csv("data/species_names.csv") %>% 
+    dplyr::select(CommonName, Genus, Species) %>%
     filter(CommonName == tmp$params$CommonName) %>% 
-    select(CombinedLatin) %>% 
+    mutate(Latin = paste(Genus, Species, sep = " ")) %>% 
+    pull(Latin) %>% 
     as.character()
   
   # plot GAM predictions for species/model
@@ -244,45 +252,62 @@ for (mf in seq_along(modfiles)){
   
   preds$adjY <- predict.gam(object = mod, newdata = preds, type="response")
   
-  preds <- preds %>% 
+  preds2 <- preds %>% 
     group_by(SiteYear) %>%
     mutate(Gamma = adjY / as.vector(sum(adjY)),
            SiteYearTotal = sum(adjY)) %>%
     ungroup() %>% 
-    filter(adjY > 0) %>% 
-    # mutate(ztotal = ((.7 - .1) * (SiteYearTotal - min(SiteYearTotal))
-    #                  /(max(SiteYearTotal) - min(SiteYearTotal))) + .1) %>% 
-    group_by(region) %>% 
-    filter(SiteYear %in% sample(unique(SiteYear), 10, replace = TRUE))
+    filter(adjY > 0, year %in% c(2008:2017), SiteYearTotal > median(SiteYearTotal)) %>% 
+    mutate(yrgroup = ifelse(year %in% c(2010, 2011, 2012, 2016, 2017), "Warm years", "Cool years"),
+           sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites")) %>% 
+    group_by(sitegroup, yrgroup) %>% 
+    filter(SiteYear %in% sample(unique(SiteYear), 5, replace = TRUE))
   
-  preds$region <- factor(preds$region, levels = c("NW", "NE", "SW", "CN"))
+  # preds$region <- factor(preds$region, levels = c("NW", "NE", "SW", "CN"))
   
-  # outliers
-  outs <- counts %>% 
-    filter(Total > 0) %>% 
-    dplyr::select(accumdegday, DOY, region) %>% 
-    filter(complete.cases(.))
+  # Fig 2A ----
+  # Degree-day timescale
+  gamplt <- ggplot(preds2, aes(x = accumdegday, y = Gamma, group = SiteYear, color = yrgroup)) +
+    geom_path(alpha = .75) + 
+    scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +   
+    facet_wrap(~sitegroup, ncol = 1, scales = "free_y") +
+    # ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
+            # subtitle = "Seasonal phenology modeled on degree-day scale") +
+    labs(x = "Degree-days accumulated (5/30°C thresholds)") +
+    labs(y = "Scaled phenology (model predictions)") +
+      theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+    theme(legend.position = c(.15, .925))
+  gamplt
+  ggsave(filename = "example_gam.tif", path = "figures", device='tiff', dpi=600)
   
-  outs$region <- factor(outs$region, levels = c("NW", "NE", "SW", "CN"))
+  saveRDS(gamplt, file = paste0("figures/species_examples/gam_", latin, ".rds"))
+  # ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."), 
+         # plot = gamplt, device = "png", path = "figures/species_examples/", width = 8, height = 6, units = "in")
   
-  gamplt <- ggplot(preds, aes(x = accumdegday, y = Gamma, group = SiteYear, color = SiteYearGDD)) +
-    geom_path(aes(alpha = log(SiteYearTotal))) + 
-    scale_color_viridis() + 
-    facet_wrap(~region, ncol = 2) +
-    geom_rug(data = outs, aes(x = accumdegday), sides="b", inherit.aes = FALSE,  alpha = 0.3) +
-    ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
-            subtitle = "seasonal phenology modeled on degree-day scale") +
-    labs(color = "Total degree-days\n for site and year") +
-    labs(x = "Degree-days accumulated (5/30C thresholds)") +
-    labs(y = "Scaled phenology (model predictions)")
-  ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."), 
-         plot = gamplt, device = "png", path = "gams/plots", width = 8, height = 6, units = "in")
+  # Fig 2B ----
+  # Day of year timescale
+  preds2$date <- as.Date(as.Date("2019-12-31",  "%Y-%m-%d") + ddays(preds2$yday))
+  
+  gamdoyplt <- ggplot(preds2, aes(x = date, y = Gamma, group = SiteYear, color = yrgroup)) +
+    geom_path(alpha = .75) + 
+    scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +   
+    scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+    facet_wrap(~sitegroup, ncol = 1, scales = "free_y") +
+    # ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
+    # subtitle = "Seasonal phenology modeled on degree-day scale") +
+    labs(x = "Calendar date") +
+    labs(y = "Scaled phenology (model predictions)") +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+    theme(legend.position = c(.15, .925))
+  gamdoyplt
+  ggsave(filename = "example_gamdoy.tif", path = "figures", device='tiff', dpi=600)
+  
   
   
 }
 
 outparams <- bind_rows(sp_params)
-saveRDS(outparams, "modparams.5.rds")
+saveRDS(outparams, "data/modparams.5.rds")
 
 
 # GAM parameters ----
@@ -302,7 +327,7 @@ for (mf in seq_along(modfiles)){
 }
 outparams <- bind_rows(sp_params)
 
-outparams <- readRDS("modparams.5.rds") %>% 
+outparams <- readRDS("data/modparams.5.rds") %>% 
   filter(CommonName %in% sp)
 
 

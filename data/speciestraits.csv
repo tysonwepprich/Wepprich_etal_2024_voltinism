@@ -10,14 +10,14 @@ Euphydryas phaeton phaeton,Baltimore,83,818,-0.21,0.06,0,resident,larva,forb,3,1
 Satyrium calanus falacer,Banded Hairstreak,468,1107,0.03,0.02,0.19,resident,egg,woody,4,1,1,1.5,0,0,3,0,0
 Papilio polyxenes asterius,Black Swallowtail,941,12410,-0.04,0.02,0,resident,pupa,forb,3,1,3,4.7,0,1,3,1,1
 Poanes viator viator,Broad-winged Skipper,32,4338,-0.15,0.06,0.01,resident,larva,gram,2,1,1,2,1,0,1,0,0
-Lycaena hyllus,Bronze Copper,254,656,-0.06,0.04,0.1,resident,egg,forb,3,1,3,2,1,1,2,1,1
+Lycaena hyllus,Bronze Copper,254,656,-0.06,0.04,0.1,resident,egg,forb,3,1,3,2,1,1,2,1,0
 Pieris rapae,Cabbage White,1005,304105,-0.04,0.01,0,naturalized,pupa,forb,3,1,5,2.3,0,1,3,1,1
 Hermeuptychia sosybius,Carolina Satyr,40,822,-0.14,0.12,0.24,resident,larva,gram,3,1,2,1.7,0,0,5,0,0
 Colias philodice philodice,Clouded Sulphur,998,49267,-0.01,0.01,0.29,resident,pupa,forb,3,1,5,2.6,0,1,3,1,0
 Phoebis sennae eubule,Cloudless Sulphur,355,1840,0.09,0.06,0.1,immigrant,adult,forb,2,1,2,3.3,0,1,5,0,0
 Junonia coenia,Common Buckeye,834,15771,0.11,0.06,0.08,immigrant,adult,forb,4,1,3,2.8,0,1,5,0,0
 Pyrgus communis,Common Checkered-Skipper,357,3089,0.1,0.04,0.02,immigrant,larva,forb,3,1,2,1.6,0,1,5,0,0
-Pholisora catullus,Common Sooty Wing,398,1142,-0.07,0.03,0,resident,larva,forb,4,3,3,1.4,0,1,3,1,1
+Pholisora catullus,Common Sooty Wing,398,1142,-0.07,0.03,0,resident,larva,forb,4,3,3,1.4,0,1,3,1,0
 Cercyonis pegala alope,Common Wood Nymph,788,21603,-0.07,0.01,0,resident,larva,gram,3,1,1,3.4,0,0,3,0,0
 Satyrium titus titus,Coral Hairstreak,217,607,-0.07,0.02,0,resident,egg,woody,3,1,1,1.7,0,0,3,0,0
 Polites origenes origenes,Crossline Skipper,347,1087,0.06,0.03,0.04,resident,larva,gram,3,1,2,1.5,0,0,3,1,1
@@ -63,10 +63,10 @@ Colias eurytheme,Orange Sulphur,996,62160,-0.06,0.02,0.01,naturalized,pupa,forb,
 Vanessa cardui,Painted Lady,873,5564,-0.04,0.05,0.44,immigrant,adult,forb,4,1,2,3.2,0,1,3,0,0
 Phyciodes tharos tharos,Pearl Crescent,1005,180631,-0.01,0.01,0.46,resident,larva,forb,2,1,4,1.8,0,1,3,1,1
 Polites peckius,Peck's Skipper,905,23702,0.01,0.01,0.31,resident,larva,gram,3,1,3,1.3,0,1,3,1,1
-Battus philenor philenor,Pipevine Swallowtail,279,703,0.04,0.03,0.08,resident,pupa,forb,3,1,3,4.75,0,0,4,1,1
+Battus philenor philenor,Pipevine Swallowtail,279,703,0.04,0.03,0.08,resident,pupa,forb,3,1,3,4.75,0,0,4,1,0
 Polygonia interrogationis,Question Mark,915,6564,-0.01,0.03,0.64,immigrant,adult,woody,4,1,2,3.2,0,0,3,0,0
 Vanessa atalanta rubria,Red Admiral,969,28637,0.01,0.04,0.86,immigrant,adult,forb,3,1,3,3.2,0,1,3,0,0
-Calycopis cecrops,Red-banded Hairstreak,91,795,0.01,0.06,0.88,resident,larva,woody,4,1,2,1.2,0,0,5,1,1
+Calycopis cecrops,Red-banded Hairstreak,91,795,0.01,0.06,0.88,resident,larva,woody,4,1,2,1.2,0,0,5,1,0
 Limenitis arthemis astyanax,Red-spotted Purple,913,6226,-0.06,0.02,0,resident,larva,woody,4,1,3,4.4,0,0,3,1,1
 Atalopedes campestris huron,Sachem,231,1445,0.07,0.07,0.29,immigrant,larva,gram,3,1,2,1.7,0,1,5,0,0
 Epargyreus clarus clarus,Silver-spotted Skipper,996,54462,0.01,0.01,0.67,resident,pupa,forb,3,1,3,2.9,0,1,3,1,1
@@ -76,7 +76,7 @@ Eurema nicippe,Sleepy Orange,63,2028,0.15,0.13,0.28,immigrant,adult,forb,2,1,2,2
 Thorybes bathyllus,Southern Cloudywing,194,667,-0.12,0.04,0,resident,larva,forb,3,1,2,1.9,0,0,4,1,1
 Papilio troilus troilus,Spicebush Swallowtail,858,25322,-0.01,0.01,0.32,resident,pupa,woody,3,1,3,4.9,0,0,3,1,1
 Satyrium liparops strigosum,Striped Hairstreak,211,155,-0.03,0.07,0.68,resident,egg,woody,4,1,1,1.4,0,0,3,0,0
-Nastra lherminier,Swarthy Skipper,78,448,-0.15,0.06,0.02,resident,larva,gram,1,1,2,1.2,0,0,5,1,1
+Nastra lherminier,Swarthy Skipper,78,448,-0.15,0.06,0.02,resident,larva,gram,1,1,2,1.2,0,0,5,1,0
 Asterocampa clyton clyton,Tawny Emperor,308,937,-0.11,0.04,0,resident,larva,woody,2,1,1,3.1,0,0,4,0,0
 Polites themistocles,Tawny-edged Skipper,541,2322,-0.06,0.02,0,resident,pupa,gram,2,1,2,1.4,0,1,3,1,1
 Euptoieta claudia,Variegated Fritillary,204,956,-0.01,0.05,0.84,immigrant,adult,forb,4,1,2,3.2,0,1,5,0,0

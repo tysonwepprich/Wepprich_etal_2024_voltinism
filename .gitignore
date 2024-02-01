@@ -1,3 +1,6 @@
+# Large GAM files
+gams/
+
 # History files
 .Rhistory
 .Rapp.history
