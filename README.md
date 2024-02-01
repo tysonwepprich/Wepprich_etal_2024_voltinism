@@ -30,7 +30,3 @@ Unnumbered R scripts are for various utility functions
 
 **In the data directory**, we include raw data and intermediate products described with a metadata file. 
 Model results from generalized additive models were too large for inclusion.
-
-
-**In the figures directory**, we include the output from the analysis that we include in the manuscript.
-Example figures from 05_species_models.R included here, but not in manuscript.

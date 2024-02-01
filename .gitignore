@@ -1,6 +1,6 @@
-# Large GAM files
-gams/
-figures/
+# Too large model output/figures
+figures/*.tif
+gams/*.rds
 
 # History files
 .Rhistory
