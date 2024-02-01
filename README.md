@@ -30,3 +30,5 @@ Unnumbered R scripts are for various utility functions
 
 **In the data directory**, we include raw data and intermediate products described with a metadata file. 
 Model results from generalized additive models were too large for inclusion.
+
+[![DOI](https://zenodo.org/badge/746868950.svg)](https://zenodo.org/doi/10.5281/zenodo.10607626)
