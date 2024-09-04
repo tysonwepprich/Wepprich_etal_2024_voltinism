@@ -12,6 +12,8 @@
 ## Fitting models for 30 species takes 45 minutes on a 8-core 32GB-RAM laptop
 ## Running this script is not necessary to reproduce the main results, but would
 ## be required to run 03_estimate_abundance_by_generation.R to fit mixture models with GAM-imputed counts
+##
+## Phenology plots for each species are in the figures/species_gams directory in the repository
 ## ---
 
 source('code/01_data_prep.R')
@@ -23,10 +25,10 @@ source('code/01_data_prep.R')
 # Select species, as is it will attempt to fit models for 100+ species
 
 # run examples species only (Phyciodes tharos) for Fig 2 or all 30 species
-allspecies <- allspecies[which(allspecies$CommonName == "Pearl Crescent"), ]
-# allspecies <- read.csv("data/speciestraits.csv") %>% 
-  # filter(final_mv_analysis == 1) %>% 
-  # dplyr::select(CommonName, final_mv_analysis)
+# allspecies <- allspecies[which(allspecies$CommonName == "Pearl Crescent"), ]
+allspecies <- read.csv("data/speciestraits.csv") %>%
+  filter(mv_analysis == 1) %>%
+  dplyr::select(CommonName, mv_analysis)
 
 
 system.time({
@@ -84,11 +86,38 @@ outfiles <- foreach(sp = 1:nrow(allspecies),
                         mutate(zlistlength = as.numeric(scale(listlength)))
                       
                       
+                      # anchoring zeros outside of monitoring season
+                      # aids in GAM fitting to avoid biologically unrealistic predictions at ends of season
+                      anchor_start <- counts %>% 
+                        group_by(SiteID, Year) %>% 
+                        summarise(SiteDate = ymd(paste(Year[1], "03", "15", sep = "-")),
+                                  Week = NA,
+                                  SeqID = NA,
+                                  Total = 0,
+                                  listlength = NA,
+                                  temperature = NA,
+                                  duration = NA,
+                                  zlistlength = NA)
+                      anchor_end <- counts %>% 
+                        group_by(SiteID, Year) %>% 
+                        summarise(SiteDate = ymd(paste(Year[1], "11", "15", sep = "-")),
+                                  Week = NA,
+                                  SeqID = NA,
+                                  Total = 0,
+                                  listlength = NA,
+                                  temperature = NA,
+                                  duration = NA,
+                                  zlistlength = NA)
+                      counts <- counts %>% 
+                        bind_rows(anchor_start) %>% 
+                        bind_rows(anchor_end)
+                      
+                      
                       # trying to add GDD instead of ordinal date
                       counts <- counts %>% 
                         left_join(gdd) %>% 
                         group_by(SiteID, Year) %>% 
-                        mutate(SurvPerYear = length(unique(SeqID)),
+                        mutate(SurvPerYear = length(unique(SeqID[!is.na(SeqID)])),
                                YearTotal = sum(Total))
                       
                       # what if cutoff for inclusion is really open?
@@ -138,6 +167,7 @@ outfiles <- foreach(sp = 1:nrow(allspecies),
                             
                           })
                           
+                          
                           modtime_po <- system.time({ 
                             mod_po <- safe_bam(Total ~
                                                  # s(zlistlength, bs = "cr") +
@@ -154,7 +184,7 @@ outfiles <- foreach(sp = 1:nrow(allspecies),
                                                control = list(maxit = 500))
                             
                           })
-                          
+                          # should I run through DOY models, too?
                           if(is.null(mod_po$error) == TRUE & is.null(mod_nb$error) == TRUE){
                             # compare models
                             if(AIC(mod_po$result) <= AIC(mod_nb$result)){
@@ -257,19 +287,43 @@ for (mf in seq_along(modfiles)){
     mutate(Gamma = adjY / as.vector(sum(adjY)),
            SiteYearTotal = sum(adjY)) %>%
     ungroup() %>% 
-    filter(adjY > 0, year %in% c(2008:2017), SiteYearTotal > median(SiteYearTotal)) %>% 
+    filter(adjY > 0, year %in% c(2008:2017), SiteYearTotal > median(SiteYearTotal)) %>%
     mutate(yrgroup = ifelse(year %in% c(2010, 2011, 2012, 2016, 2017), "Warm years", "Cool years"),
-           sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites")) %>% 
-    group_by(sitegroup, yrgroup) %>% 
-    filter(SiteYear %in% sample(unique(SiteYear), 5, replace = TRUE))
+           sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites")) %>%
+    group_by(sitegroup, yrgroup) %>%
+    filter(SiteYear %in% sample(unique(SiteYear), 10, replace = TRUE))
   
-  # preds$region <- factor(preds$region, levels = c("NW", "NE", "SW", "CN"))
+  outs <- counts %>% 
+    filter(Total > 0) %>% 
+    dplyr::select(accumdegday, DOY, region) %>% 
+    filter(complete.cases(.))
   
+  outs$region <- factor(outs$region, levels = c("NW", "NE", "SW", "CN"))
+  
+  # Example GAM figure for each species ----
+  preds2$region <- factor(preds2$region, levels = c("NW", "NE", "SW", "CN"))
+  gamplt <- ggplot(preds2, aes(x = accumdegday, y = Gamma, group = SiteYear, color = SiteYearGDD)) +
+    # geom_path(aes(alpha = log(SiteYearTotal))) +
+    geom_path(alpha = .3) +
+    scale_color_viridis() + 
+    facet_wrap(~region, ncol = 2) +
+    geom_rug(data = outs, aes(x = accumdegday), sides="b", inherit.aes = FALSE,  alpha = 0.3) +
+    ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
+            subtitle = "seasonal phenology modeled on degree-day scale") +
+        theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+    labs(color = "Total degree-days\n for site and year") +
+    labs(x = "Degree-days accumulated (5/30C thresholds)") +
+    labs(y = "Scaled phenology (model predictions)")
+  # gamplt
+  ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."),
+  plot = gamplt, device = "png", path = "figures/species_gams/", width = 10, height = 7.5, units = "in")
+
+
   # Fig 2A ----
   # Degree-day timescale
   gamplt <- ggplot(preds2, aes(x = accumdegday, y = Gamma, group = SiteYear, color = yrgroup)) +
-    geom_path(alpha = .75) + 
-    scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +   
+    geom_path(alpha = .75) +
+    scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +
     facet_wrap(~sitegroup, ncol = 1, scales = "free_y") +
     # ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
             # subtitle = "Seasonal phenology modeled on degree-day scale") +
@@ -279,18 +333,18 @@ for (mf in seq_along(modfiles)){
     theme(legend.position = c(.15, .925))
   gamplt
   ggsave(filename = "fig2A.tif", path = "figures", device='tiff', dpi=600)
-  
+
   # saveRDS(gamplt, file = paste0("figures/species_examples/gam_", latin, ".rds"))
-  # ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."), 
-         # plot = gamplt, device = "png", path = "figures/species_examples/", width = 8, height = 6, units = "in")
-  
+  # ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."),
+  #        plot = gamplt, device = "png", path = "figures/species_examples/", width = 8, height = 6, units = "in")
+
   # Fig 2B ----
   # Day of year timescale
   preds2$date <- as.Date(as.Date("2019-12-31",  "%Y-%m-%d") + ddays(preds2$yday))
-  
+
   gamdoyplt <- ggplot(preds2, aes(x = date, y = Gamma, group = SiteYear, color = yrgroup)) +
-    geom_path(alpha = .75) + 
-    scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +   
+    geom_path(alpha = .75) +
+    scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +
     scale_x_date(date_breaks = "1 month", date_labels = "%b") +
     facet_wrap(~sitegroup, ncol = 1, scales = "free_y") +
     # ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
@@ -301,8 +355,8 @@ for (mf in seq_along(modfiles)){
     theme(legend.position = c(.15, .925))
   gamdoyplt
   ggsave(filename = "fig2B.tif", path = "figures", device='tiff', dpi=600)
-  
-  
+
+
   
 }
 
@@ -327,8 +381,11 @@ for (mf in seq_along(modfiles)){
 }
 outparams <- bind_rows(sp_params)
 
-outparams <- readRDS("data/modparams.5.rds") %>% 
-  filter(CommonName %in% sp)
+saveRDS(outparams, "data/modparams.revision.rds")
+
+readRDS("data/modparams.revision.rds")
+outparams <- readRDS("data/modparams.revision.rds") %>% 
+  filter(CommonName %in% allspecies$CommonName)
 
 
 

@@ -12,12 +12,10 @@
 ## Model of overwinter population growth rate in response to last generation size x winter onset/temperature
 ## Model of species statewide trends
 ## Simulation of population consequences of larger generations (integrating results from overwinter model)
-## Optional plots of species results for the supplement
+## Optional plots of species results (not included in manuscript)
 ## Results saved in "data/species_models.rds", which is used for the voltinism trait vs long-term trend analysis in 07_voltinism_traits.R.
+## Alternative set of results run with imputation weighting in models, checked differences at bottom of this script
 ## ---
-
-
-# 7.	Last generation relative size by photoperiod, latitude, temperature, precipitation
 
 library(lme4)
 library(merTools)
@@ -26,6 +24,7 @@ library(ggeffects)
 library(broom)
 library(broom.mixed)
 library(DescTools)
+library(performance)
 
 
 source('code/01_data_prep.R')
@@ -46,7 +45,10 @@ moddat2 <- moddat %>%
          zphoto = scale_this(photo),
          zfrost = scale_this(firstfrostdoy),
          zwinter = scale_this(allwintertemp),
-         zyear = YearNum - 2009) %>% 
+         zyear = YearNum - 2009,
+         # Covariates added for imputation to test if imputed surveys are unduly affecting results
+         last_imputation_weights = (lastObs + 1)/(lastImp + lastObs + 1), # NA's if both Imp/Obs are zero
+         first_imputation_weights = (firstObs + 1)/(firstImp + firstObs + 1)) %>% # NA's if both Imp/Obs are zero
   group_by(CommonName) %>% 
   mutate(zordspec = mean(zord),
          zphotospec = mean(zphoto),
@@ -75,6 +77,20 @@ latin <- read.csv("data/species_names.csv") %>%
 
 moddat2 <- left_join(moddat2, latin)
 
+# Imputation weights by species based on observed counts versus imputed counts
+moddat2 %>% group_by(CommonName) %>% 
+  summarise(last = sum(response, na.rm = TRUE), 
+            last_obs = sum(response * last_imputation_weights), 
+            last_perc_obs = last_obs / (last),
+            first = sum(response1, na.rm = TRUE),
+            first_obs = sum(response1 * first_imputation_weights, na.rm = TRUE),
+            first_perc_obs = first_obs / first) %>% 
+  summary()
+
+# Fig S13: Imputation weights ----
+hist(moddat2$first_imputation_weights, main = "First generation imputation", xlab = "Proportion of count observed vs. imputed")
+hist(moddat2$last_imputation_weights, main = "Last generation imputation", xlab = "Proportion of count observed vs. imputed")
+
 # Species models ----
 outlist <- list()
 sp <- sort(unique(moddat2$CommonName))
@@ -89,11 +105,13 @@ for (i in sp){
   mod <- lmer(lastloglambda ~ zdensann + zyear + (zordsite + zordann)^2 + 
                 (1|SiteID),
               data = tmp, 
+              # weights = last_imputation_weights,
               control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
   
   step_fm <- step(mod, alpha.fixed = .1, keep = c("zdensann", "zyear"))
   mod <- get_model(step_fm)
   # print(summary(mod))
+  # check_model(mod)
   
   # # example figures
   # print(try(ggpredict(mod, "zyear") %>% plot() + ggtitle(i)))
@@ -155,11 +173,13 @@ for (i in sp){
                # (1 + zdensann + zyear + | SiteID),
                # (1|Year) +
                (1|SiteID),
+             # weights = last_imputation_weights + first_imputation_weights,
              data = tmp2, control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)))
   
   step_fm <- step(ow2, alpha.fixed = .1)
   ow2 <- get_model(step_fm)
   # print(summary(ow2))
+  # check_model(ow2)
   
   # # Example figure
   # # print(try(ggpredict(ow2, c("zlastann", "zlastsite", "zwinterann")) %>% plot() + ggtitle(i)))
@@ -202,13 +222,24 @@ for (i in sp){
   # response of last generation size to spatial means and annual variation
   
   fit0 <- lmer(lastloglambda ~ zdensann + zord + (1|SiteID), data = tmp)
+  # equation 2 from van de pol & wright (2009)
+  # coef of zordsite == between site sensitivity, zordann == within site/between year sensitivity
   fit1 <- lmer(lastloglambda ~ zdensann + zordsite + zordann + (1|SiteID), data = tmp)
+  # equation 3 from van de pol & wright (2009)
+  # coefficient for zordsite == Between - within group difference
+  # (equivalent to space - time sensitivity in Ramirez-Pareda et al (2024))
   fit2 <- lmer(lastloglambda ~ zdensann + zord + zordsite + (1|SiteID), data = tmp)
-  
+
+  # # with imputation weights
+  # fit0 <- lmer(lastloglambda ~ zdensann + zord + (1|SiteID), data = tmp, weights = last_imputation_weights)
+  # fit1 <- lmer(lastloglambda ~ zdensann + zordsite + zordann + (1|SiteID), data = tmp, weights = last_imputation_weights)
+  # fit2 <- lmer(lastloglambda ~ zdensann + zord + zordsite + (1|SiteID), data = tmp, weights = last_imputation_weights)
+
   vdp_param <- bind_rows(tidy(fit0) %>% mutate(model = "vdp_1"), 
                          tidy(fit1) %>% mutate(model = "vdp_2"),
                          tidy(fit2) %>% mutate(model = "vdp_3"))
   # print(vdp_param)
+  
   
   # Species' statewide population trend ----
   tmp3 <- genpop %>%
@@ -220,10 +251,9 @@ for (i in sp){
            zmeanLL = MeanListLength,
            logtime = log(MeanDuration)) %>%
     filter(gen == 1) %>%
-    mutate(Index = round(trap.N)) %>%
+    mutate(Index = round(trap.N),
+           first_imputation_weights = (total.obs.gen + 1)/(total.imp.gen + total.obs.gen + 1)) %>%
     droplevels()
-  
-  tmp3 <- left_join(tmp3, distinct(tmp[,c("SiteID", "zlastsite")]))
   
   modgen <- glmer(Index ~ zyear 
                   + zmeanLL +
@@ -233,6 +263,7 @@ for (i in sp){
                   offset = logtime,
                   family = poisson(link = "log"),
                   data = tmp3,
+                  # weights = first_imputation_weights,
                   control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e7)))
   
   # print(summary(modgen))
@@ -265,19 +296,6 @@ for (i in sp){
   # Simulation of consequences of larger last generation ----
   species_lg_sd <- sd(tmp$zlastann, na.rm = TRUE)
   
-  sitelist <- list()
-  rm(aa)
-  tmp2 <- tmp2 %>%
-    group_by(SiteID) %>%
-    mutate(nlams = length(ow_lam))
-  sitereps <- unique(tmp2$SiteID[which(tmp2$nlams>=5)])
-  
-  
-  for (site in sitereps){
-    aa <- tmp2 %>% filter(SiteID == site) %>%
-      arrange(Year) %>%
-      dplyr::select(Year, SiteID, lastloglambda, zdensann, zyear, zlastsite, zlastann, zfrostann, zwinterann, ow_lam, nlams)
-    
     # simulate owlam with different zlastann with model uncertainty
     # for each simulation compare observed, sitemean, and random zlastann, then geometric mean across years
     # output for each sim x site x scenario gm_mean, then compare differences (with uncertainty from sim) in scenarios for each site
@@ -288,46 +306,46 @@ for (i in sp){
       simulate(object = object, nsim = nsim, seed = seed, ...)
     }
     
-    # observed
+    # observed  # try tmp2 (not aa)
     if(class(ow2) == "lm"){
-      obssims <- simulateX(ow2,  nsim = 101, X = aa)
+      obssims <- simulateX(ow2,  nsim = 101, X = tmp2)
       
       # larger LG
-      largedat <- aa %>%
+      largedat <- tmp2 %>%
         mutate(zlastann = zlastann + species_lg_sd)
       largesims <- simulateX(ow2,  nsim = 101, X = largedat)
       
       
       # smaller LG overall
-      smalldat <- aa %>%
+      smalldat <- tmp2 %>%
         mutate(zlastann = zlastann - species_lg_sd)
       smallsims <- simulateX(ow2,  nsim = 101, X = smalldat)
       
       
       # zlastann = 0
-      meanpred <- aa %>%
+      meanpred <- tmp2 %>%
         mutate(zlastann = 0)
       meansims <- simulateX(ow2,  nsim = 101, X = meanpred)
       
     }else{
       
-      obspred <- predictInterval(ow2, newdata = aa, n.sims = 101, stat = "median", returnSims = TRUE)
+      obspred <- predictInterval(ow2, newdata = tmp2, n.sims = 101, stat = "median", returnSims = TRUE)
       obssims <- attr(obspred, "sim.results")
       
       # larger LG
-      largedat <- aa %>%
+      largedat <- tmp2 %>%
         mutate(zlastann = zlastann + species_lg_sd)
       largepred <- predictInterval(ow2, newdata = largedat, n.sims = 101, stat = "median", returnSims = TRUE)
       largesims <- attr(largepred, "sim.results")
       
       # smaller LG overall
-      smalldat <- aa %>%
+      smalldat <- tmp2 %>%
         mutate(zlastann = zlastann - species_lg_sd)
       smallpred <- predictInterval(ow2, newdata = smalldat, n.sims = 101, stat = "median", returnSims = TRUE)
       smallsims <- attr(smallpred, "sim.results")
       
       # zlastann = 0
-      meandat <- aa %>%
+      meandat <- tmp2 %>%
         mutate(zlastann = 0)
       meanpred <- predictInterval(ow2, newdata = meandat, n.sims = 101, stat = "median", returnSims = TRUE)
       meansims <- attr(meanpred, "sim.results")
@@ -336,45 +354,59 @@ for (i in sp){
     
     
     
-    simdat <- rbind(rowMeans(log(apply(obssims, 2, FUN = function(x) Gmean(exp(x), conf.level = .5)))),
-                    rowMeans(log(apply(largesims, 2, FUN = function(x) Gmean(exp(x), conf.level = .5)))),
-                    rowMeans(log(apply(smallsims, 2, FUN = function(x) Gmean(exp(x), conf.level = .5)))),
-                    rowMeans(log(apply(largesims - smallsims, 2, FUN = function(x) Gmean(exp(x), conf.level = .5)))),
-                    rowMeans(log(apply(meansims, 2, FUN = function(x) Gmean(exp(x), conf.level = .5)))))
+    simdat <- rbind(rowMeans(log(apply(obssims, 2, FUN = function(x) Gmean(exp(x), conf.level = .95)))),
+                    rowMeans(log(apply(largesims, 2, FUN = function(x) Gmean(exp(x), conf.level = .95)))),
+                    rowMeans(log(apply(smallsims, 2, FUN = function(x) Gmean(exp(x), conf.level = .95)))),
+                    rowMeans(log(apply(largesims - smallsims, 2, FUN = function(x) Gmean(exp(x), conf.level = .95)))),
+                    rowMeans(log(apply(meansims, 2, FUN = function(x) Gmean(exp(x), conf.level = .95)))))
     simdat <- data.frame(simdat)
     simdat$scen <- c("obs", "large", "small", "diff", "mean")
     
-    out <- data.frame(CommonName = i, SiteID = site, zlastsite = aa$zlastsite[1], nlams = aa$nlams[1],
-                      simdat)
+    out <- simdat %>% filter(scen == "diff")
+    site_param <- data.frame(term = "diff", 
+                             estimate = out$mean,
+                             std.error = (out$upr.ci - out$mean) / 1.959964, 
+                             statistic = NA, p.value = NA, model = "lg_sim1")
     
-    sitelist[[(length(sitelist)+1)]] <- out
-    
-  }
-  
-  if(length(sitelist) > 0){
-    site_lam <- bind_rows(sitelist)
-    
-    # note, could just use the "diff" scenario and it's uncertainty rather than below, but
-    # I don't know how to do an lm with uncertainty on the response measurement which would be ideal to average across sites
-    sitelg <- site_lam %>%
-      group_by(SiteID, zlastsite, nlams) %>%
-      summarise(largelam = mean[which(scen == "large")] - mean[which(scen == "obs")],
-                smalllam = mean[which(scen == "small")] - mean[which(scen == "obs")])
-    
-    sitelgmod1 <- lm(largelam - smalllam ~ 1, data = sitelg)
-    site_param1 <- tidy(sitelgmod1) %>% mutate(model = "lg_sim1")
-
-  }else{
-    site_param <- data.frame(term = NA, estimate = NA, std.error = NA, statistic = NA, p.value = NA, model = "lg_sim1")
-  }
-  
-  outdf <- bind_rows(lastgen_param, vdp_param, ow_param, pop_param, site_param1) %>% mutate(CommonName = i)
+  outdf <- bind_rows(lastgen_param, vdp_param, ow_param, pop_param, site_param) %>% mutate(CommonName = i)
   outlist[[(length(outlist)+1)]] <- outdf
   
 }
 allpars <- bind_rows(outlist)
 saveRDS(allpars, "data/species_models.rds")
+# saveRDS(allpars, "data/species_models_check_impute.rds")
 
 
+# Imputation robustness check ----
+# Do parameter estimates change when imputed weekly surveys are weighted lower in the models?
 
+orig_analysis <- readRDS("data/species_models.rds")
+impute_analysis <- readRDS("data/species_models_check_impute.rds")
 
+org <- orig_analysis[,c("term", "estimate", "model", "CommonName")] %>% 
+  mutate(org_est = estimate) %>% 
+  dplyr::select(-estimate) %>% 
+  filter(term != "sd__(Intercept)", term != "sd__Observation")
+imp <- impute_analysis %>% 
+  mutate(imp_est = estimate) %>% 
+  dplyr::select("term", "imp_est", "model", "CommonName") %>% 
+  filter(term != "sd__(Intercept)", term != "sd__Observation")
+
+test <- full_join(org, imp)
+
+# 37 rows with NAs where imputed parameter estimates are not made (due to model selection)
+test %>% 
+  filter(model %in% c("lastgen", "ow")) %>% 
+  group_by(term, model) %>% 
+  summarise(r = cor(org_est, imp_est, use = "complete.obs"),
+            missing_org = length(which(is.na(org_est))),
+            missing_imp = length(which(is.na(imp_est)))) %>% 
+  data.frame()
+
+# check out individual model terms across species
+test2 <- test %>% filter(term == "zyear", model == "ow")
+
+ggplot(test2, aes(org_est, imp_est, label = CommonName)) +
+  geom_point() +
+  ggrepel::geom_text_repel() +
+  geom_abline(slope = 1, intercept = 0)

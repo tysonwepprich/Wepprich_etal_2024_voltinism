@@ -1,1 +1,0 @@
-This directory is empty in the repository because output files for figure TIFF are too large. Code to produce figures is noted in main README.md.

@@ -8,6 +8,7 @@
 ## ---
 ## Notes: 
 ## This script is sourced by others
+
 ## Volunteers organized by the Ohio Lepidopterists have contributed these observations
 ## They ask that the data be used for research and that the group be acknowledged in publications
 ## https://www.ohiolepidopterists.org/
@@ -50,6 +51,46 @@ allspecies <- data %>%
 surveys <- distinct(data[, c("SeqID", "SiteID", "SiteDate", "Week")])
 # hist(year(surveys$SiteDate), breaks = 25)
 
+# Which surveys are missing? Imputation check ----
+# surv <- surveys %>% 
+#   mutate(Year = year(SiteDate)) %>% 
+#   dplyr::select(SiteID, Week, Year) %>% 
+#   mutate(SiteYear = paste(SiteID, Year, sep = "_")) %>% 
+#   distinct()
+# allsurv <- surv %>% 
+#   complete(SiteID, Week, Year) %>% 
+#   mutate(SiteYear = paste(SiteID, Year, sep = "_")) %>% 
+#   filter(Week <= 30) %>% 
+#   filter(SiteYear %in% unique(surv$SiteYear))
+# missing <- anti_join(allsurv, surv)
+# 
+# # we use data from sites that complete 10 or more surveys in a year
+# # are missing surveys distributed differently from these sites?
+# sy10cutoff <- surv %>% 
+#   group_by(SiteYear) %>% 
+#   mutate(nsurv = length(unique(Week))) %>% 
+#   filter(nsurv >= 10)
+# allsurv10 <- sy10cutoff[,c("SiteID", "Week", "Year")] %>% 
+#   complete(SiteID, Week, Year) %>% 
+#   mutate(SiteYear = paste(SiteID, Year, sep = "_")) %>% 
+#   filter(Week <= 30) %>% 
+#   filter(SiteYear %in% unique(sy10cutoff$SiteYear))
+# missing10cutoff <- anti_join(allsurv10, sy10cutoff)
+# 
+# # Fig. S12 ----
+# # visualize missing surveys for imputation check
+# ggplot(sy10cutoff %>% filter(Week <= 30), aes(x = Week)) +
+#   geom_bar(alpha = .3) +
+#   # geom_bar(data = missing10cutoff, aes(x = Week), alpha = .3) +
+#   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+#   ggtitle("Observed surveys by week of monitoring")
+# 
+# ggplot(missing10cutoff %>% filter(Week <= 30), aes(x = Week)) +
+#   geom_bar(alpha = .3) +
+#   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+#   ggtitle("Missing surveys by week of monitoring")
+
+
 # Covariates for surveys ----
 # Listlength is # of species observed, often used as catch-all covariate for effort/weather/season/etc.
 covdata <- data %>%
@@ -78,18 +119,18 @@ sites <- read.csv("data/OHsites2023update.txt") %>%
 gdd_all <- readRDS("data/daily_weather.rds")
 
 # Summarize sites' seasons----
-# season length
-gdd_seas <- gdd_all %>% 
-  group_by(SiteID, year) %>% 
-  summarise(dd = max(accumdegday),
-            lastfdd = accumdegday[max(which(hardfrost == TRUE & yday < 170))],
-            firstfdd = accumdegday[min(which(hardfrost == TRUE & yday > 170))],
-            lastfday = yday[max(which(hardfrost == TRUE & yday < 170))],
-            firstfday = yday[min(which(hardfrost == TRUE & yday > 170))],            
-            seaslength = firstfday - lastfday,
-            seaslengthdd = firstfdd - lastfdd) %>% 
-  group_by(SiteID) %>% 
-  summarise_all(.funs = list(mean, sd), na.rm = TRUE)
+# # season length
+# gdd_seas <- gdd_all %>% 
+#   group_by(SiteID, year) %>% 
+#   summarise(dd = max(accumdegday),
+#             lastfdd = accumdegday[max(which(hardfrost == TRUE & yday < 170))],
+#             firstfdd = accumdegday[min(which(hardfrost == TRUE & yday > 170))],
+#             lastfday = yday[max(which(hardfrost == TRUE & yday < 170))],
+#             firstfday = yday[min(which(hardfrost == TRUE & yday > 170))],            
+#             seaslength = firstfday - lastfday,
+#             seaslengthdd = firstfdd - lastfdd) %>% 
+#   group_by(SiteID) %>% 
+#   summarise_all(.funs = list(mean, sd), na.rm = TRUE)
 
 # Ohio sites group into 4 regions ----
 siteGDD <- gdd_all %>%
@@ -116,11 +157,11 @@ gdd <- gdd_all %>%
          SiteDate = as.Date(parse_date_time(SiteDate, orders = "Yj")))
 
 # Mean site # yrs and # surveys/yr ----
-# Reported in Methods
-samplesize <- surveys %>% mutate(year = year(SiteDate)) %>% group_by(SiteID, year) %>% 
-  summarise(nsurv = length(unique(SeqID))) %>% 
-  ungroup() %>% 
-  group_by(SiteID) %>% 
-  summarise(nyr = length(unique(year)),
-            meansurv = mean(nsurv))
-summary(samplesize)
+# # Reported in Methods
+# samplesize <- surveys %>% mutate(year = year(SiteDate)) %>% group_by(SiteID, year) %>% 
+#   summarise(nsurv = length(unique(SeqID))) %>% 
+#   ungroup() %>% 
+#   group_by(SiteID) %>% 
+#   summarise(nyr = length(unique(year)),
+#             meansurv = mean(nsurv))
+# summary(samplesize)

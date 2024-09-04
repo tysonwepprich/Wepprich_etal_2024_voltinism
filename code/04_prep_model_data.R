@@ -18,8 +18,15 @@ source('code/01_data_prep.R')
 library(broom.mixed)
 library(lme4)
 
+mvspecies <- read.csv("data/speciestraits.csv", header = TRUE) %>%
+  # filter(mv_analysis == 1) %>%
+  filter(final_mv_analysis == 1) %>%
+  droplevels.data.frame()
+incl_species <- mvspecies$CommonName[which(mvspecies$final_mv_analysis == 1)]
 
-genpop <- readRDS("data/genpops.rds")
+
+genpop <- readRDS("data/genpops.rds") %>% 
+  filter(CommonName %in% incl_species) 
 
 # Filter data, add last generation size variables ----
 popdat <- genpop %>% 
@@ -34,7 +41,24 @@ popdat <- genpop %>%
          lastDOY = trap.mu.doy[maxbrood],
          lastGDD = trap.mu.gdd[maxbrood],
          lastratio = trap.N[maxbrood] / trap.N[maxbrood-1],
-         lastloglambda = log((trap.N[maxbrood]+1) / (trap.N[maxbrood-1]+1)))
+         lastloglambda = log((trap.N[maxbrood]+1) / (trap.N[maxbrood-1]+1)),
+         lastObs = total.obs.gen[maxbrood],
+         lastImp = total.imp.gen[maxbrood])
+
+
+# Compare quantification of voltinism
+# natural log of ratio of last / penultimate works for models of population growth rates
+# main area of mismatch is when last generation is very small. 
+# lastprop would be near 0 no matter how large the penultimate generation, but
+# with lastloglambda a last generation of near 0 could have varying "sizes" depending 
+# on growth rate from penultimate generation size.
+ggplot(popdat, aes(x = lastprop, y = lastloglambda, color = log(lastN+1))) +
+  geom_point() +
+  facet_wrap(~CommonName)
+ggplot(popdat, aes(x = lastloglambda)) +
+  geom_density() +
+  facet_wrap(~CommonName)
+
 
 
 # Site covariates ----
@@ -58,20 +82,10 @@ gdd_left <- gdd %>%
   mutate(gddmismatch = actualgddleft - expgddleft,
          gddmismatchfrost = actualgddleftfrost - expgddleftfrost) 
 
-# 
-# # Cool plot of mismatch by GDD left versus first hard frost. Generally, year is more variable than site, 
-# # although in some years there is a bifurcation among sites for first frost timing. 
-# # Imagine some years would be good for all species attempting a last generation.
-# ggplot(gdd_left %>% filter(yday == 225), aes(x = gddmismatch, y = gddmismatchfrost, color = as.factor(year))) +
-#   geom_point() + facet_wrap(~year) + geom_hline(yintercept = 0) + geom_vline(xintercept = 0) + theme_minimal()
-# ggplot(gdd_left %>% group_by(year, yday) %>% summarise(meangdd = mean(accumdegday)), aes(x = yday, y = meangdd, group = year, color = year)) + 
-#   geom_line()
-# ggplot(gdd_left %>% filter(yday == 365), aes(x = year, y = accumdegday)) + 
-#   geom_point() + geom_smooth(method = "lm") + xlab("Year") + ylab("Annual growing degree-days (base 5°C)")
 
 # Covariates at brood peaks ----
 # UNCOMMENT FOR FIRST RUN
-
+# 
 # # Run once, took 15 minutes
 # # get photoperiod at brood peaks, gdd left in year at peak, temperature around peak
 # gdd2vars <- function(SiteYr, meanmu){
@@ -89,23 +103,6 @@ gdd_left <- gdd %>%
 #   gddexpectedfrost <- temp$expgddleftfrost[which(temp$accumdegday > meanmu)[1]]
 #   gddmismatchfrost <- temp$gddmismatchfrost[which(temp$accumdegday > meanmu)[1]]
 # 
-#   # mean temperature/precip near peak, larger temperature window makes it too collinear with phenology changes (ordinal date)
-#   # don't use these after all
-#   tempwindow <- 15
-#   meantemp <- temp %>%
-#     filter(yday >= ord - tempwindow & yday <= ord + tempwindow)
-#   meantemp <- mean(meantemp$daymeantemp)
-#   meanprec <- temp %>%
-#     filter(yday >= ord - tempwindow & yday <= ord + tempwindow)
-#   meanprec <- mean(meanprec$prcp..mm.day.)
-#   tempwindow <- 7.5
-#   meantemphalf <- temp %>%
-#     filter(yday >= ord - tempwindow & yday <= ord + tempwindow)
-#   meantemphalf <- mean(meantemphalf$daymeantemp)
-#   meanprechalf <- temp %>%
-#     filter(yday >= ord - tempwindow & yday <= ord + tempwindow)
-#   meanprechalf <- mean(meanprechalf$prcp..mm.day.)
-# 
 #   return(data.frame(ord,
 #              photo,
 #              gddleft,
@@ -113,11 +110,7 @@ gdd_left <- gdd %>%
 #              gddmismatch,
 #              gddleftfrost,
 #              gddexpectedfrost,
-#              gddmismatchfrost,
-#              meantemp,
-#              meanprec,
-#              meantemphalf,
-#              meanprechalf))
+#              gddmismatchfrost))
 # }
 # 
 # 
@@ -125,7 +118,7 @@ gdd_left <- gdd %>%
 #   group_by(CommonName, SiteYear, gen) %>%
 #   do(gdd2vars(.$SiteYear, .$trap.mu.gdd))
 # })
-# saveRDS(covs, "covs.rds")
+# saveRDS(covs, "data/covs.rds")
 
 covs <- readRDS("data/covs.rds")
 
@@ -148,25 +141,28 @@ firstdat <- alldat %>%
   mutate(firstN = lead(trap.N, 1),
          firstDOY = lead(trap.mu.doy, 1),
          firstGDD = lead(trap.mu.gdd, 1),
-         firstYear = lead(YearNum, 1)) %>% 
+         firstYear = lead(YearNum, 1),
+         firstObs = lead(total.obs.gen, 1),
+         firstImp = lead(total.imp.gen, 1)) %>% 
   filter(firstYear == (YearNum + 1)) %>% 
   filter(firstN > 1) %>% 
-  dplyr::select(SiteID, Year, SiteYear, CommonName, firstN:firstYear)
+  dplyr::select(SiteID, Year, SiteYear, CommonName, firstN:firstImp)
+
 
 moddat <- moddat %>% 
   left_join(firstdat)
 
 # Winter covariates ----
-# Used 5 month winter mean minimum, but labeled 6 month accidentally
+# Used 5 month winter mean minimum because it matches the months without butterfly monitoring
 winter <- gdd %>% 
   group_by(SiteID) %>% 
   arrange(SiteDate) %>% 
   mutate(mean3month = zoo::rollmean(tmin..deg.c., 90, fill = NA, align = "left"),
-         mean6month = zoo::rollmean(tmin..deg.c., 150, fill = NA, align = "left")) %>% 
+         mean5month = zoo::rollmean(tmin..deg.c., 150, fill = NA, align = "left")) %>% 
   group_by(SiteYear, year, SiteID) %>% 
   summarise(falltemp = mean3month[which(yday == 244)],
             wintertemp = mean3month[which(yday == 365)],
-            allwintertemp = mean6month[which(yday == 305)],
+            allwintertemp = mean5month[which(yday == 305)],
             siteyrtotalgdd = max(accumdegday),
             firstfrostgdd = min(accumdegday[which(yday > 200 & hardfrost == TRUE)]),
             firstfrostdoy = min(yday[which(yday > 200 & hardfrost == TRUE)]))
@@ -184,44 +180,68 @@ moddat <- moddat %>%
 
 saveRDS(moddat, "data/modeling_data.rds")
 
-# # plot how some years have many species producing extra generation (2010-2012 for example)
-# moddat <- readRDS("data/modeling_data.rds")
-# pltpop <- moddat %>% 
-#   group_by(CommonName, SiteID) %>% 
-#   mutate(sitemean = mean(lastprop),
-#          siteyearmean = lastprop - sitemean)
-# ggplot(pltpop %>% filter(CommonName == "Cabbage White") , aes(x = sitemean, y = siteyearmean, color = Year)) +
-#   geom_point() + facet_wrap(~Year) # + geom_hline(yintercept = 0) + geom_vline(xintercept = 0) + theme_minimal()
-# ggplot(pltpop %>% filter(CommonName == "Pearl Crescent"), aes(x = YearNum, y = siteyearmean)) +
-#   geom_point() + geom_smooth() + facet_wrap(~CommonName) # + geom_hline(yintercept = 0) + geom_vline(xintercept = 0) + theme_minimal()
-# 
-# 
-
 # Fig 2D ----
-# example species
-lgvar <- moddat %>%
-  filter(CommonName == "Pearl Crescent", year %in% c(2008:2017), YearTotal >= 50, nyr >= 15, photo > 12.2) %>%
+# # Original
+# # example species
+# lgvar <- moddat %>%
+#   filter(CommonName == "Pearl Crescent", year %in% c(2008:2017), YearTotal >= 50, nyr >= 15, photo > 12.2) %>%
+#   mutate(yrgroup = ifelse(year %in% c(2010, 2011, 2012, 2016, 2017), "Warm years", "Cool years"),
+#          sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites"))
+# lgvarplt <- ggplot(data = lgvar, aes(x = photo,
+#                                       y = lastratio,
+#                                       color = yrgroup))+
+#   geom_point()+
+#   scale_x_reverse() +
+#   scale_y_log10() +
+#   scale_color_brewer(name = NULL, palette = "Set1", direction = -1) +
+#   scale_fill_brewer(name = NULL, palette = "Set1", direction = -1) +
+#   facet_grid(sitegroup~yrgroup) +
+#   theme_bw(base_size = 18) +
+#   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(),
+#         legend.position = c(.25, .1)) +
+#   labs(
+#     x = "Day length at penultimate peak",
+#     y = "Last generation size",
+#     title = NULL)
+# lgvarplt
+# 
+# ggsave(filename = "Fig2D.tif", path = "figures", device='tiff', dpi=600)
+
+# revision Fig. 2D ----
+lgvar <- moddat %>% 
+  filter(CommonName == "Pearl Crescent", 
+         year %in% c(2008:2017),
+         YearTotal >= 50, nyr >= 15, photo > 12.2) %>%
   mutate(yrgroup = ifelse(year %in% c(2010, 2011, 2012, 2016, 2017), "Warm years", "Cool years"),
-         sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites"))
-lgvarplt <- ggplot(data = lgvar, aes(x = photo,
-                                      y = lastloglambda,
-                                      color = yrgroup))+
-  geom_point()+
+         sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites")) %>% 
+  group_by(SiteID) %>% 
+  mutate(site_photo = mean(photo),
+         site_LG = DescTools::Gmean(lastratio),
+         site_gdd = mean(siteyrtotalgdd))
+lgsite <- lgvar %>% select(SiteID, site_photo, site_LG) %>% distinct()
+
+
+lgvarplt <- ggplot(data = lgvar, aes(x = photo, y = lastratio, group = SiteID, color = site_gdd)) +
+  # geom_point(alpha = .1) +
+  geom_line(stat="smooth", method = "lm", se = FALSE,
+            size = 1,
+            # linetype ="dashed",
+            alpha = 0.5) +  
+  scale_color_gradient(name = "Mean site\ndegree-days", high = "#ca0020", low = "#0571b0") +
+  scale_y_log10() +
   scale_x_reverse() +
-  scale_color_brewer(name = NULL, palette = "Set1", direction = -1) +
-  scale_fill_brewer(name = NULL, palette = "Set1", direction = -1) +
-  facet_wrap(~sitegroup, ncol = 1) +
+  geom_point(data = lgsite, aes(x = site_photo, y = site_LG), inherit.aes = FALSE, color = "black", size = 1.5) +
+  geom_smooth(data = lgsite, aes(x = site_photo, y = site_LG), inherit.aes = FALSE, method = "lm", se = FALSE, color = "black", size = 1.25) +
   theme_bw(base_size = 18) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(),
-        legend.position = c(.25, .1)) +
+        legend.position = c(.85, .8)) +
   labs(
-    x = "Day length at penultimate peak",
-    y = "Last generation size",
+    x = "Day length (hours) at mean phenology\nof penultimate generation",
+    y = "Relative size of last generation compared\nto penultimate generation size (axis on log scale)",
     title = NULL)
+
 lgvarplt
-
 ggsave(filename = "Fig2D.tif", path = "figures", device='tiff', dpi=600)
-
 
 
 # # good figure of raw data
@@ -253,6 +273,9 @@ ggsave(filename = "Fig2D.tif", path = "figures", device='tiff', dpi=600)
 
 # Environmental covariates ----
 # Correlations among environmental covariates
+
+# Example using Pieris rapae
+# using degree-days left in the season isn't useful because it's so correlated with the last generation size
 envdat <- moddat %>% 
   filter(CommonName == "Cabbage White")
 GGally::ggpairs(envdat[, c("lastprop", "gddleft", "gddexpected", "gddleftfrost", "gddmismatch", "allwintertemp")])
@@ -289,22 +312,39 @@ weather_trends <- gdd %>%
   group_by(SiteID) %>% 
   arrange(SiteDate) %>% 
   mutate(mean3month = zoo::rollmean((tmin..deg.c. + tmax..deg.c.)/2, 90, fill = NA, align = "left"),
-         mean6month = zoo::rollmean((tmin..deg.c. + tmax..deg.c.)/2, 180, fill = NA, align = "left")) %>% 
+         mean5month = zoo::rollmean((tmin..deg.c. + tmax..deg.c.)/2, 150, fill = NA, align = "left")) %>% 
   group_by(SiteYear, year, SiteID) %>% 
   summarise(falltemp = mean3month[which(yday == 244)],
             wintertemp = mean3month[which(yday == 335)],
-            allwintertemp = mean6month[which(yday == 305)],
-            siteyrtotalgdd = max(accumdegday),
+            allwintertemp = mean5month[which(yday == 305)],
+            allgdd = max(accumdegday),
             firstfrostgdd = min(accumdegday[which(yday > 200 & hardfrost == TRUE)]),
-            firstfrostdoy = min(yday[which(yday > 200 & hardfrost == TRUE)]),
-            allgdd = accumdegday[which(yday == 365)])
+            firstfrostdoy = min(yday[which(yday > 200 & hardfrost == TRUE)]))
 
+# weather variation by site/year
+gdd %>% 
+  group_by(year) %>% 
+  summarise(meantemp = mean((tmax..deg.c. + tmin..deg.c.)/2)) %>% 
+  pull(meantemp) %>% 
+  summary()
+gdd %>% 
+  group_by(SiteID) %>% 
+  summarise(meantemp = mean((tmax..deg.c. + tmin..deg.c.)/2)) %>% 
+  pull(meantemp) %>% 
+  summary()
+gdd %>% 
+  group_by(SiteID, year) %>% 
+  summarise(meantemp = mean((tmax..deg.c. + tmin..deg.c.)/2)) %>% 
+  pull(meantemp) %>% 
+  summary()
+
+library(lmerTest)
 # annual gdd trend
 tidy(lmer(allgdd ~ year + (1|SiteID), data = weather_trends))
 # later frost DOY, more GDD before first frost, almost equal to total trend in annual GDD
 tidy(lmer(firstfrostdoy ~ year + (1|SiteID), data = weather_trends))
 tidy(lmer(firstfrostgdd ~ year + (1|SiteID), data = weather_trends))
-# Warmer 6 month winter temperature
+# Warmer 5 month winter temperature
 tidy(lmer(allwintertemp~ year + (1|SiteID), data = weather_trends))
 # Warmer 3 month winter temperature
 tidy(lmer(wintertemp ~ year + (1|SiteID), data = weather_trends))
@@ -312,3 +352,73 @@ tidy(lmer(wintertemp ~ year + (1|SiteID), data = weather_trends))
 tidy(lmer(falltemp ~ year + (1|SiteID), data = weather_trends))
 
 
+# no correlation between 5-month winter mean minimum temperature and first frost date (0.001)
+# 3-month fall and 3-month winter temperatures are correlated (0.50)
+# 3-month fall temperature and first frost DOY correlated (0.27)
+
+GGally::ggpairs(weather_trends[, c("falltemp", "wintertemp", "allwintertemp", "firstfrostdoy")])
+
+
+# Spatial and temporal variation in weather ----
+# Compare change over time
+
+ggplot(weather_trends, aes(x = year, y = firstfrostdoy, group = SiteID)) +
+  # geom_point(shape = 95, size = 5, alpha = .33) +
+  geom_point(
+    position = position_jitter(width = .2, height = .1, seed = 0),
+    size = 3, alpha = .1)+
+  geom_abline(slope = 0.126, intercept = 58.6, color = "blue", linewidth = 1) +
+  # scale_y_date(date_breaks = "1 month", date_labels = "%b") +
+  theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+  ylab("Day of first fall frost (-2°C)") +
+  xlab("Year") +
+  ggtitle("First fall frost", subtitle = "Trend and variation across sites and years")
+
+ggplot(weather_trends, aes(x = year, y = firstfrostgdd, group = SiteID)) +
+  geom_point(shape = 95, size = 5, alpha = .33) +
+  # geom_point(
+  #   position = position_jitter(width = .2, height = .1, seed = 0),
+  #   size = 3, alpha = .1)+
+  geom_abline(slope = 9.67, intercept = -16546, color = "blue", linewidth = 1) +
+  # scale_y_date(date_breaks = "1 month", date_labels = "%b") +
+  theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+  ylab("Cumulative degree-days (5/30°C thresholds)\nby first fall frost (-2°C)") +
+  xlab("Year") +
+  ggtitle("Degree-days by first fall frost", subtitle = "Trend and variation across sites and years")
+
+ggplot(weather_trends, aes(x = year, y = allwintertemp, group = SiteID)) +
+  geom_point(shape = 95, size = 5, alpha = .33) +
+  geom_abline(slope = 0.0287, intercept = -56.3, color = "blue", linewidth = 1) +
+  theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+  ylab("Winter mean minimum temperature (°C, Nov-Mar)") +
+  xlab("Year") +
+  ggtitle("Winter temperature", subtitle = "Trend and variation across sites and years")
+
+ggplot(weather_trends, aes(x = year, y = allgdd, group = SiteID)) +
+  geom_point(shape = 95, size = 5, alpha = .33) +
+  geom_abline(slope = 9.85, intercept = -16840, color = "blue", linewidth = 1) +
+  theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
+  ylab("Cumulative degree-days (5/30°C thresholds)") +
+  xlab("Year") +
+  ggtitle("Season length in degree-days", subtitle = "Trend and variation across sites and years")
+  
+
+
+# Imputation by generation ----
+
+impdat <- genpop %>% 
+  filter(CommonName %in% incl_species) %>% 
+  filter(nyr >= 5, ObsSurvTotal >= 10, PosObsWeeks >= 3, trap.N.allgens >= 10, YearTotal >= 3) %>% 
+  mutate(SiteYear = paste(SiteID, Year, sep = "_")) %>% 
+  group_by(CommonName) %>% 
+  mutate(maxbrood = base::max(as.numeric(gen))) %>% 
+  group_by(CommonName, SiteYear, gen) %>%
+  mutate(obs_vs_imp_weeks = weeks.obs.gen / (weeks.obs.gen + weeks.imp.gen),
+         obs_vs_imp_total = total.obs.gen / (total.obs.gen + total.imp.gen))
+ggplot(impdat %>% filter(gen == maxbrood, trap.N >=1), aes(x = obs_vs_imp_total))+
+  geom_histogram() +
+  facet_wrap(~CommonName, scales = "free")
+
+ggplot(impdat %>% filter(gen == 1, trap.N >= 1), aes(x = obs_vs_imp_total))+
+  geom_histogram() +
+  facet_wrap(~CommonName, scales = "free")

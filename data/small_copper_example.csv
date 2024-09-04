@@ -1,0 +1,10 @@
+Model,n,AIC,deltaAIC
+"Poisson, B = 1",2,42075,11471.5
+"Poisson, B = 2, equal",4,42081,11477.5
+"Poisson, B = 3, equal",6,39488,8883.9
+"ZIP, B = 3, equal",7,35731,5127.6
+"NB, B = 3, equal",7,30665,61.8
+"NB, B = 3, unequal",9,30644,40.1
+"NB, B = 4, equal",9,30639,35.4
+"NB, B = 4, unequal",12,30638,34.7
+"NB, B = 5, unequal",15,30604,0.0

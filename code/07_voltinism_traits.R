@@ -6,8 +6,8 @@
 ## License: CC0 1.0 Universal
 ## Email: tyson.wepprich@gmail.com
 ## ---
-## Notes: 
-## 
+## Notes: Traits from previous analysis are brought into this script for summarizing into tables and Fig. 3.
+## Correlations between traits are analyzed, followed by a bootstrap analysis using PGLS.
 ## ---
 library(corrplot)
 library(ggrepel)
@@ -57,12 +57,18 @@ moddat2 <- moddat %>%
          zwintersite = mean(zwinter, na.rm = TRUE),
          zwinterann = zwinter - mean(zwinter, na.rm = TRUE))
 
+mvspecies <- read.csv("data/speciestraits.csv", header = TRUE) %>%
+  # filter(mv_analysis == 1) %>%
+  filter(final_mv_analysis == 1) %>%
+  droplevels.data.frame()
+incl_species <- mvspecies$CommonName[which(mvspecies$final_mv_analysis == 1)]
 
 # Methods verification
-# shows how GDD always had lower class uncertainty that DOY
+# shows how GDD had lower class uncertainty than DOY in mixture models
 mmcompare <- readRDS("data/mixmodcomparison.rds")
 mmused <- mmcompare %>% 
   filter(uncertainty > 0.000000001) %>% 
+  filter(species %in% incl_species) %>% 
   # filter(time != "doy") %>%
   group_by(species) %>% 
   # mutate(maxgen = max(gen)) %>% 
@@ -92,35 +98,73 @@ species_table <- left_join(species_table, penult_doy)
 allpars <- readRDS("data/species_models.rds")
 
 # simulated benefit of last generation
-# 8 species not enough data unless filter changed from 10/site to 5/site
-# 8 negative, only EuroSkip & Lil Glassywing signif.
-# 22 positive, 14 signif
+# 7 negative, none signif.
+# 23 positive
 lg_sim1 <- allpars %>% filter(model == "lg_sim1")
 lg_sim1 %>% filter(!is.na(std.error)) %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)
 
-# local adaptation
-allpars %>% filter(model == "vdp_2") %>% 
-  filter(term == "zordsite") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)
-# pheno plasticity
-allpars %>% filter(model == "vdp_2") %>% 
-  filter(term == "zordann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)
-# signif co-gradient: 7 species
-sp1 <- allpars %>% filter(model == "vdp_2") %>% 
-  filter(term == "zordann") %>% filter(p.value < 0.05) %>%  arrange(estimate) %>%  data.frame() %>% round_df(digits = 2) %>%  pull(CommonName)
-sp2 <- allpars %>% filter(model == "vdp_2") %>% 
-  filter(term == "zordsite") %>% filter(p.value < 0.05) %>%  arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)%>%  pull(CommonName)
-allpars %>% filter(model == "vdp_2", CommonName %in% sp1[sp1 %in% sp2]) %>% data.frame() %>%  round_df(digits = 2)
+# Local adaptation vs phenotypic plasticity ----
+
+# # Original analysis
+# # phenotypic plasticity
+# allpars %>% filter(model == "vdp_2") %>% 
+#   filter(term == "zordann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)
+# # local adaptation
+# allpars %>% filter(model == "vdp_2") %>% 
+#   filter(term == "zordsite") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)
+# # signif co-gradient: 7 species
+# sp1 <- allpars %>% filter(model == "vdp_2") %>% 
+#   filter(term == "zordann") %>% filter(p.value < 0.05) %>%  arrange(estimate) %>%  data.frame() %>% round_df(digits = 2) %>%  pull(CommonName)
+# sp2 <- allpars %>% filter(model == "vdp_2") %>% 
+#   filter(term == "zordsite") %>% filter(p.value < 0.05) %>%  arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)%>%  pull(CommonName)
+# allpars %>% filter(model == "vdp_2", CommonName %in% sp1[sp1 %in% sp2]) %>% data.frame() %>%  round_df(digits = 2)
+
+# Revised analysis
+# adapting van de pol & wright (2009) equations for pattern classes in Ramirez-Parada et al. (2024)
+# main difference is that local adaptation is the difference between sensitivity over space - sensitivity over time
+# 5 patterns possible when measuring sensitivity of phenology (here voltinism) over space and time
+sensitivity <- allpars %>% 
+  group_by(CommonName) %>% 
+  summarise(Stime = estimate[which(model == "vdp_2" & term == "zordann")],
+            Stime_p = p.value[which(model == "vdp_2" & term == "zordann")],
+            Sspace = estimate[which(model == "vdp_2" & term == "zordsite")],
+            Sspace_p = p.value[which(model == "vdp_2" & term == "zordsite")],
+            Sspace_minus_time = estimate[which(model == "vdp_3" & term == "zordsite")],
+            Sspace_minus_time_p = p.value[which(model == "vdp_3" & term == "zordsite")])
+sens_classes <- sensitivity %>% 
+  rowwise() %>% 
+  mutate(process = case_when(Stime_p < 0.05 & Sspace_minus_time_p >= 0.05 ~ "Plasticity only",
+                             Sspace_minus_time_p < 0.05 & Stime_p >= 0.05 ~ "Local adaptation only",
+                             Stime_p < 0.05 & Sspace_minus_time_p < 0.05 & (Sspace * Stime) > 0 & abs(Sspace) > abs(Stime) ~ "Co-gradient",
+                             Stime_p < 0.05 & Sspace_minus_time_p < 0.05 & (Sspace * Stime) > 0 & abs(Sspace) < abs(Stime) ~ "Counter-gradient",
+                             Stime_p < 0.05 & Sspace_minus_time_p < 0.05 & (Sspace * Stime) < 0  ~ "Counter-gradient",
+                             Stime_p >= 0.05 & Sspace_minus_time_p >= 0.05 ~ "Neither",
+                             TRUE ~ "Error"))
+                             
 
 
 
-# ow model
+
+
+# Summary of overwinter species model coefficients ----
 allpars %>% filter(model == "ow") %>% 
-  filter(term == "zdensann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 2)
-
-# trend
-# 20 negative/10 positive (or 6 sig neg/3 sig pos)
-allpars %>% filter(model == "trend") %>% 
+  filter(term == "zdensann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3)
+allpars %>% filter(model == "ow") %>% 
   filter(term == "zyear") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3)
+allpars %>% filter(model == "ow") %>% 
+  filter(term == "zlastsite") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3)
+allpars %>% filter(model == "ow") %>% 
+  filter(term == "zlastann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3)
+allpars %>% filter(model == "ow") %>% 
+  filter(term == "zwinterann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3)
+allpars %>% filter(model == "ow") %>% 
+  filter(term == "zfrostann") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3)
+
+# statewide trend
+# 20 negative/10 positive (or 6 sig neg/3 sig pos)
+# adding annual percent change based on coefficient
+allpars %>% filter(model == "trend") %>% 
+  filter(term == "zyear") %>% arrange(estimate) %>%  data.frame() %>% round_df(digits = 3) %>% mutate(perc = 100*(exp(estimate)-1))
 
 
 
@@ -128,10 +172,10 @@ allpars %>% filter(model == "trend") %>%
 traits <- allpars %>% 
   group_by(CommonName) %>% 
   summarise(LG_trend = estimate[which(term == "zyear" & model == "lastgen")],
-            local_adapt = estimate[which(term == "zordsite" & model == "vdp_2")],
+            local_adapt = estimate[which(model == "vdp_3" & term == "zordsite")], # revised
             annual_plast = estimate[which(term == "zordann" & model == "vdp_2")],
             trend = estimate[which(term == "zyear" & model == "trend")],
-            lg_sim = ifelse(is.na(std.error[which(term == "(Intercept)" & model == "lg_sim1")]), NA, estimate[which(term == "(Intercept)" & model == "lg_sim1")]))
+            lg_sim = ifelse(is.na(std.error[which(term == "diff" & model == "lg_sim1")]), NA, estimate[which(term == "diff" & model == "lg_sim1")]))
 traits <- left_join(traits, distinct(moddat2[,c("CommonName", "maxbrood", "zordspec", "zlastspec")]))
 
 
@@ -152,14 +196,14 @@ modtraits <- allpars %>%
   group_by(CommonName) %>% 
   summarise(LG_trend = estimate[which(term == "zyear" & model == "lastgen")],
             LG_trend_se = std.error[which(term == "zyear" & model == "lastgen")],
-            local_adapt = estimate[which(term == "zordsite" & model == "vdp_2")],
-            local_adapt_se = std.error[which(term == "zordsite" & model == "vdp_2")],
+            local_adapt = estimate[which(model == "vdp_3" & term == "zordsite")], # revised
+            local_adapt_se = std.error[which(model == "vdp_3" & term == "zordsite")], #revised
             annual_plast = estimate[which(term == "zordann" & model == "vdp_2")],
             annual_plast_se = std.error[which(term == "zordann" & model == "vdp_2")],
             trend = estimate[which(term == "zyear" & model == "trend")],
             trend_se = std.error[which(term == "zyear" & model == "trend")],
-            lg_sim = estimate[which(term == "(Intercept)" & model == "lg_sim1")],
-            lg_sim_se = std.error[which(term == "(Intercept)" & model == "lg_sim1")]) %>% 
+            lg_sim = estimate[which(term == "diff" & model == "lg_sim1")],
+            lg_sim_se = std.error[which(term == "diff" & model == "lg_sim1")]) %>% 
   mutate(LG_trend = paste0(round(LG_trend,3), "  [", round(LG_trend-1.96*LG_trend_se,3), ", ", round(LG_trend+1.96*LG_trend_se,3), "]"),
          LGspatial = paste0(round(local_adapt,3), "  [", round(local_adapt-1.96*local_adapt_se,3), ", ", round(local_adapt+1.96*local_adapt_se,3), "]"),
          LGannual = paste0(round(annual_plast,3), "  [", round(annual_plast-1.96*annual_plast_se,3), ", ", round(annual_plast+1.96*annual_plast_se,3), "]"),
@@ -171,23 +215,32 @@ species_table$Sample <- paste(species_table$uniqSY, species_table$uniqSYlam, sep
 species_table_out <- species_table[which(!is.na(species_table$LG_trend)), c("Latin", "Sample", "Generations", "meandoy", "LG_trend", "LGspatial", "LGannual", "LGsim", "PopTrend")] %>% 
   arrange(Latin)
 
-# not included in manuscript
-write.csv(species_table_out, "Table1.csv", row.names = FALSE)
+# Species model coefficients for sharing ----
+# last generation size model
+LGmod <- allpars %>% filter(model == "lastgen")
+write.csv(LGmod, "species_model_coefficients/coefficients_last_gen_size.csv", row.names = FALSE)
+# overwinter model
+OWmod <- allpars %>% filter(model == "ow")
+write.csv(OWmod, "species_model_coefficients/coefficients_overwinter.csv", row.names = FALSE)
 
-# Fig. 4: caterpillar plot ----
+
+# not included in manuscript
+write.csv(species_table_out, "species_model_coefficients/TraitsTable.csv", row.names = FALSE)
+
+# Fig. 3: caterpillar plot ----
 
 modtraits <- allpars %>% 
   group_by(CommonName) %>% 
   summarise(LG_trend = estimate[which(term == "zyear" & model == "lastgen")],
             LG_trend_se = std.error[which(term == "zyear" & model == "lastgen")],
-            local_adapt = estimate[which(term == "zordsite" & model == "vdp_2")],
-            local_adapt_se = std.error[which(term == "zordsite" & model == "vdp_2")],
+            local_adapt = estimate[which(model == "vdp_3" & term == "zordsite")], # revised
+            local_adapt_se = std.error[which(model == "vdp_3" & term == "zordsite")], #revised
             annual_plast = estimate[which(term == "zordann" & model == "vdp_2")],
             annual_plast_se = std.error[which(term == "zordann" & model == "vdp_2")],
             trend = estimate[which(term == "zyear" & model == "trend")],
             trend_se = std.error[which(term == "zyear" & model == "trend")],
-            lg_sim = estimate[which(term == "(Intercept)" & model == "lg_sim1")],
-            lg_sim_se = std.error[which(term == "(Intercept)" & model == "lg_sim1")])
+            lg_sim = estimate[which(term == "diff" & model == "lg_sim1")],
+            lg_sim_se = std.error[which(term == "diff" & model == "lg_sim1")])
 
 catdat1 <- modtraits %>% 
   dplyr::select(-ends_with("_se")) %>% 
@@ -203,23 +256,23 @@ catdat <- bind_cols(catdat1, catdat2) %>%
 
 sp_levels <- catdat %>% filter(Trait == "trend") %>% arrange(-Estimate) %>% pull(Latin) %>% unique()
 catdat$Trait <- factor(catdat$Trait, levels = c("LG_trend", "local_adapt", "annual_plast", "lg_sim", "trend"), ordered = TRUE)
-levels(catdat$Trait) <- c("Trend in\nLG size", "LG response to\nsite phenology", "LG response to\nannual phenology", 
-                                  "Simulated effect\nof larger LG","Population\ntrend")
+levels(catdat$Trait) <- c("Trend in last\ngeneration size", "Last generation:\nlocal adaptation", "Last generation:\nphenotypic plasticity", 
+                                  "Simulated effect of\nlarger last generation","Population trend\n(1st generation only)")
 catdat$Latin_ordered = factor(catdat$Latin, levels=sp_levels, ordered = TRUE)
 
 ggplot(catdat, aes(y = Latin_ordered, x = Estimate, color = pnt_shape)) + 
-  geom_point() + 
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = .5) +
+  geom_hline(yintercept = seq(5.5, 25.5,length.out = 5), alpha = .1) +geom_point() + 
   scale_color_manual(name = NULL, values = c("gray", "black")) +
   geom_pointrange(aes(xmin = lwr, 
                       xmax = upr)) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_hline(yintercept = seq(5.5, 25.5,length.out = 5), alpha = .1) +
   xlab("Estimate (95% CI)") +
   ylab(NULL) +
   facet_grid(~Trait, scales = "free") +
+  theme_bw(base_size = 14) +
   theme(legend.position = "none") +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.text.y = element_text(face = "italic"))
-ggsave(filename = "fig4.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "fig3.tif", path = "figures", device='tiff', dpi=600)
 
 
 species <- read.csv("data/species_names.csv") %>% 
@@ -229,28 +282,33 @@ species <- read.csv("data/species_names.csv") %>%
          Latin_abbrev = paste0(str_sub(Genus, 1, 1), ". ", Species)) 
 plttraits <- left_join(traits, species)
 
-# Fig. 5B ----
-ggplot(plttraits, aes(x = LG_trend, y = lg_sim, label = Latin_abbrev, color = trend)) +
+# Fig. S9 traits ----
+ggplot(plttraits, aes(x = LG_trend, y = lg_sim, label = Latin, color = trend)) +
   geom_point() +
-  scale_color_viridis(name = "Population\ntrend", option = "C", begin = .8, end = 0) +
-  geom_text_repel(size = 5, fontface = "italic") +
-  geom_hline(yintercept = 0, linetype = "dashed", alpha = .4) +
-  geom_vline(xintercept = 0, linetype = "dashed", alpha = .4) +
-  xlab("Observed trend in last generation size") +
-  ylab("Simulated change in overwinter population growth\nwith 1 std. dev. larger last generation") +
+  scale_color_viridis(name = "Population\ntrend\n(1st gen. only)", option = "C", begin = .8, end = 0) +
+  geom_text_repel(size = 3.5, fontface = "italic", min.segment.length = 0) +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = .3) +
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = .3) +
+  xlab("Voltinism shift: Observed trend in last generation size") +
+  ylab("Simulated effect of larger last generation size\non overwinter population growth rates") +
+  theme_bw(base_size = 16) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-  theme(legend.position = c(.875, .2))
+  theme(legend.position = c(.9, .85))
 
-ggsave(filename = "fig5B.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS9.tif", path = "figures", device='tiff', dpi=600)
 
 
 # correlations without bootstrap ----
 # not used in manuscript
 
 traits_clean <- traits
-names(traits_clean) <- c("CommonName", "Trend in\nLG size", "LG response to\nsite phenology", "LG response to\nannual phenology", "Population\ntrend",
-                         "Simulated effect\nof larger LG", "Max # of\ngenerations", "Mean penult.\npeak date",
-                         "Mean\nLG size")
+names(traits_clean) <- c("CommonName", 
+                         "Trend in last\ngeneration size", 
+                         "Last generation:\nlocal adaptation", 
+                         "Last generation:\nphenotypic plasticity",
+                         "Population\ntrend",
+                         "Simulated effect of\nlarger last generation", "Max # of\ngenerations", "Mean species\nphenology",
+                         "Species mean last\ngeneration size")
 traits_clean <- traits_clean[,c(1, 8, 9, 2, 3,4,6,5)]
 GGally::ggpairs(traits_clean[, -1])
 
@@ -265,8 +323,8 @@ corrplot(M, type = "upper", addCoef.col = 'black')
 set.seed(1)
 sp <- sort(unique(moddat2$CommonName))
 
-cordat <- array(data = NA, dim = c(30, 7, 1000))
-for (i in 1:30){
+cordat <- array(data = NA, dim = c(length(sp), 7, 1000))
+for (i in 1:length(sp)){
   
   tmpars <- allpars %>% filter(CommonName == sp[i])
   
@@ -277,11 +335,11 @@ for (i in 1:30){
   # species LG trend
   cordat[i,3,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "zyear" & tmpars$model == "lastgen")], sd = tmpars$std.error[which(tmpars$term == "zyear" & tmpars$model == "lastgen")])
   # spatial var
-  cordat[i,4,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "zordsite" & tmpars$model == "vdp_2")], sd = tmpars$std.error[which(tmpars$term == "zordsite" & tmpars$model == "vdp_2")])
+  cordat[i,4,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "zordsite" & tmpars$model == "vdp_3")], sd = tmpars$std.error[which(tmpars$term == "zordsite" & tmpars$model == "vdp_3")]) # revised
   # temporal var
   cordat[i,5,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "zordann" & tmpars$model == "vdp_2")], sd = tmpars$std.error[which(tmpars$term == "zordann" & tmpars$model == "vdp_2")])
   # simulation effect
-  cordat[i,6,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "(Intercept)" & tmpars$model == "lg_sim1")], sd = tmpars$std.error[which(tmpars$term == "(Intercept)" & tmpars$model == "lg_sim1")])
+  cordat[i,6,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "diff" & tmpars$model == "lg_sim1")], sd = tmpars$std.error[which(tmpars$term == "diff" & tmpars$model == "lg_sim1")])
   # statewide trend
   cordat[i,7,] <- rnorm(n = 1000, mean = tmpars$estimate[which(tmpars$term == "zyear" & tmpars$model == "trend")], sd = tmpars$std.error[which(tmpars$term == "zyear" & tmpars$model == "trend")])
 }
@@ -297,7 +355,7 @@ attr(Mlo, "dimnames") <- attr(M, "dimnames")
 Mhi <- M.bs[3,,]
 attr(Mhi, "dimnames") <- attr(M, "dimnames")
 
-tiff('figures/fig5A.tiff', units="in", width=7, height=7, res=600, compression = 'lzw')
+tiff('figures/fig5A_diag.tiff', units="in", width=8, height=8, res=600, compression = 'lzw')
 
 corrplot::corrplot(Mcoef, type = "upper", addCoef.col = 'black', tl.col	= "black", col = COL2('BrBG', 100), number.digits = 2, diag = TRUE)
 
@@ -306,12 +364,12 @@ xs <- row(Mlo)
 ys <- (ncol(Mlo)+1) - col(Mlo)
 text(xs[lower.tri(xs)], ys[lower.tri(xs)], conf[lower.tri(xs)], pos=1, cex=.75)
 # bug in corrplot, can't add coef for bottom right corner, but only when diag = FALSE in corrplot function above!
-paste0("(", format(Mlo[6,7], digits=1, nsmall = 2), ",", format(Mhi[6,7], digits=1, nsmall = 2), ")")
+# paste0("(", format(Mlo[6,7], digits=1, nsmall = 2), ",", format(Mhi[6,7], digits=1, nsmall = 2), ")")
 
 dev.off()
 
 
-# visualization of trait plots with correlation bootstrap error
+# Visualization of trait plots with correlation bootstrap error
 trait.bs <- apply(cordat, c(1,2), FUN = stats::quantile, probs = c(0.025, .5, 0.975))
 trait.bs.lo <- data.frame(CommonName = sp, trait.bs[1,,], quant = "lo")
 trait.bs.med <- data.frame(CommonName = sp, trait.bs[2,,], quant = "med")
@@ -329,39 +387,77 @@ lg_trend_wide <- trait.df %>%
 names(lg_trend_wide) <- c("CommonName", "LG_trend_lo", "LG_trend", "LG_trend_hi")
 
 plt_trait <- merge(trend_wide, lg_trend_wide)
+plt_trait <- left_join(plt_trait, species)
 
-ggplot(plt_trait, aes(x = LG_trend, y = trend, label = CommonName)) +
+theme_set(theme_bw(base_size = 16)) 
+
+# Fig. 5B and S6 ----
+ggplot(plt_trait, aes(x = LG_trend, y = trend, label = Latin)) +
   geom_point() +
-  geom_text_repel(size = 4) +
-  geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
-  geom_linerange(aes(xmin = LG_trend_lo, xmax = LG_trend_hi), alpha = .3) +
+  geom_text_repel(size = 3.25, fontface = "italic", min.segment.length = 0) +
+  # geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
+  # geom_linerange(aes(xmin = LG_trend_lo, xmax = LG_trend_hi), alpha = .3) +
   # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
   # geom_hline(yintercept = meantrend, linetype = "dashed", alpha = .4) +
   # geom_vline(xintercept = meansim, linetype = "dashed", alpha = .4) +
-  xlab("Observed trend in last generation size") +
-  ylab("Observed statewide population trend (1st generation, 1996-2022)") +
+  xlab("Voltinism shift: trend in last generation size") +
+  ylab("Statewide population trend (1st generation only)") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# ggsave(filename = "fig5Brevision.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS6.tiff", path = "figures", device='tiff', dpi=600)
+
 
 OW_sim_wide <- trait.df %>% 
   dplyr::select(CommonName, lg_sim, quant) %>% 
   pivot_wider(id_cols = CommonName, names_from = quant, values_from = lg_sim)
 names(OW_sim_wide) <- c("CommonName", "LG_sim_lo", "LG_sim", "LG_sim_hi")
 plt_trait <- merge(trend_wide, OW_sim_wide)
+plt_trait <- left_join(plt_trait, species)
 
-ggplot(plt_trait, aes(x = LG_sim, y = trend, label = CommonName)) +
+# Fig. 5C and S7 ----
+ggplot(plt_trait, aes(x = LG_sim, y = trend, label = Latin)) +
   geom_point() +
-  geom_text_repel(size = 4) +
-  geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
-  geom_linerange(aes(xmin = LG_sim_lo, xmax = LG_sim_hi), alpha = .3) +
+  geom_text_repel(size = 3.25, fontface = "italic", min.segment.length = 0) +
+  # geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
+  # geom_linerange(aes(xmin = LG_sim_lo, xmax = LG_sim_hi), alpha = .3) +
   # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
   # geom_hline(yintercept = meantrend, linetype = "dashed", alpha = .4) +
   # geom_vline(xintercept = meansim, linetype = "dashed", alpha = .4) +
-  xlab("Simulated change in overwinter population growth\nwith 1 std. dev. larger last generation") +
-  ylab("Observed statewide population trend (1st generation, 1996-2022)") +
+  xlab("Simulated effect of larger last generation size\non overwinter population growth rates") +
+  ylab("Statewide population trend (1st generation only)") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# ggsave(filename = "fig5Crevision.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS7.tiff", path = "figures", device='tiff', dpi=600)
+
+# Fig. S8 ----
+# plasticity vs species phenology
+phen_wide <- trait.df %>% 
+  dplyr::select(CommonName, zordspec, quant) %>% 
+  pivot_wider(id_cols = CommonName, names_from = quant, values_from = zordspec)
+names(phen_wide) <- c("CommonName", "phen_lo", "phen", "phen_hi")
+plast_wide <- trait.df %>% 
+  dplyr::select(CommonName, annual_plast, quant) %>% 
+  pivot_wider(id_cols = CommonName, names_from = quant, values_from = annual_plast)
+names(plast_wide) <- c("CommonName", "plast_lo", "plast", "plast_hi")
+plt_trait <- merge(phen_wide, plast_wide)
+plt_trait <- left_join(plt_trait, species)
+
+ggplot(plt_trait, aes(x = phen, y = plast, label = Latin)) +
+  geom_point() +
+  geom_text_repel(size = 3.25, fontface = "italic", min.segment.length = 0) +
+  # geom_linerange(aes(ymin = plast_lo, ymax = plast_hi), alpha = .3) +
+  # geom_linerange(aes(xmin = phen_lo, xmax = phen_hi), alpha = .3) +
+  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
+  # geom_hline(yintercept = meantrend, linetype = "dashed", alpha = .4) +
+  # geom_vline(xintercept = meansim, linetype = "dashed", alpha = .4) +
+  xlab("Mean species phenology (scaled)") +
+  ylab("Species phenotypic plasticity of last generation size\n(response to annual variation in phenology)") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave(filename = "figS8.tiff", path = "figures", device='tiff', dpi=600)
 
 
-# phylogenetic without bootstrap ----
+
+# Phylogenetic regression without bootstrap ----
 trends <- traits
 
 best.tree <- read.nexus(file = "data/RAxML_bipartitions.OHbflyBOLD_JRA_cds_aligned.gBlocks.consensus.famsConstrained.nex")
@@ -429,10 +525,11 @@ coefs_noboot <- pglslist %>%
   }) %>% 
   bind_rows(.id = "id")
 
+# Table S3 data set 1 ----
 write.csv(coefs_noboot, "data/pgls_noboot.csv", row.names = FALSE)
 
 
-# phylogenetic bootstrap ----
+# Phylogenetic regression with bootstrap ----
 out <- list()
 for (i in 1:1000){
   tmpdat <- data.frame(cordat[,,i])
@@ -504,10 +601,11 @@ for (i in 1:1000){
 }
 bsout <- bind_rows(out)
 
-saveRDS(bsout, "pgls_bootstrap.rds")
+saveRDS(bsout, "data/pgls_bootstrap_revision.rds")
 
-bsout <- readRDS("data/pgls_bootstrap.rds")
+bsout <- readRDS("data/pgls_bootstrap_revision.rds")
 
+# Table S3 data set 2 ----
 coefs_boot <- bsout %>% group_by(id, var) %>% summarise(med = quantile(Estimate, .5),
                                           lo = quantile(Estimate, .025),
                                           hi = quantile(Estimate, .975),
@@ -517,7 +615,7 @@ coefs_boot <- bsout %>% group_by(id, var) %>% summarise(med = quantile(Estimate,
                                           p_med = quantile(Pr...t.., .5),
                                           p_lo = quantile(Pr...t.., .025),
                                           p_hi = quantile(Pr...t.., .975))
-write.csv(coefs_boot, "data/pgls_boot.csv", row.names = FALSE)
+write.csv(coefs_boot, "data/pgls_boot_revision.csv", row.names = FALSE)
 
 
 
@@ -527,38 +625,41 @@ species <- read.csv("data/species_names.csv") %>%
   mutate(Latin = paste(Genus, Species, sep = " ")) 
 plttraits <- left_join(traits, species)
 
-# Fig. S4 ----
 
-ggplot(plttraits, aes(x = LG_trend, y = trend, label = Latin)) +
-  geom_point() +
-  geom_text_repel(size = 4, fontface = 'italic') +
-  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
-  geom_hline(yintercept = 0, linetype = "dashed", alpha = .25) +
-  geom_vline(xintercept = 0, linetype = "dashed", alpha = .25) +
-  geom_abline(intercept = -0.021, slope = 0.502, linetype = "solid", alpha = .4) +
-  annotate("text", x = 0.04, y = .1, label = "paste(italic(t), \" = 2.84, \", d.f., \" = 28, \",italic(P), \" = 0.0083\")", parse = TRUE) +
-  annotate("text", x = 0.04, y = .09, label = "paste(italic(R)^{2}, \" = 0.20\")", parse = TRUE) +
-  xlab("Observed trend in last generation size") +
-  ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-
-ggsave(filename = "figS4.tif", path = "figures", device='tiff', dpi=600)
-
-# Fig. S5 ----
-
-ggplot(plttraits, aes(x = lg_sim, y = trend, label = Latin)) +
-  geom_point() +
-  geom_text_repel(size = 4, fontface = 'italic') +
-  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
-  geom_hline(yintercept = 0, linetype = "dashed", alpha = .25) +
-  geom_vline(xintercept = 0, linetype = "dashed", alpha = .25) +
-  geom_abline(intercept = -0.019, slope = 0.0548, alpha = .4, linetype = "solid") +
-  annotate("text", x = -.35, y = .1, label = "paste(italic(t), \" = 2.15, \", d.f., \" = 28, \",italic(P), \" = 0.0396\")", parse = TRUE) +
-  annotate("text", x = -.35, y = .09, label = "paste(italic(R)^{2}, \" = 0.11\")", parse = TRUE) +
-  xlab("Simulated change in overwinter population growth\nwith 1 std. dev. larger last generation") +
-  ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-
-ggsave(filename = "figS5.tif", path = "figures", device='tiff', dpi=600)
-
-
+# 
+# # Plots in original manuscript, not used in revision
+# # Fig. S4 
+# # check parameters for figure regression equations
+# ggplot(plttraits, aes(x = LG_trend, y = trend, label = Latin)) +
+#   geom_point() +
+#   geom_text_repel(size = 4, fontface = 'italic') +
+#   # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
+#   geom_hline(yintercept = 0, linetype = "dashed", alpha = .25) +
+#   geom_vline(xintercept = 0, linetype = "dashed", alpha = .25) +
+#   geom_abline(intercept = -0.021, slope = 0.502, linetype = "solid", alpha = .4) +
+#   annotate("text", x = 0.04, y = .1, label = "paste(italic(t), \" = 2.84, \", d.f., \" = 28, \",italic(P), \" = 0.0083\")", parse = TRUE) +
+#   annotate("text", x = 0.04, y = .09, label = "paste(italic(R)^{2}, \" = 0.20\")", parse = TRUE) +
+#   xlab("Observed trend in last generation size") +
+#   ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# 
+# ggsave(filename = "figS4.tif", path = "figures", device='tiff', dpi=600)
+# 
+# # Fig. S5 
+# 
+# ggplot(plttraits, aes(x = lg_sim, y = trend, label = Latin)) +
+#   geom_point() +
+#   geom_text_repel(size = 4, fontface = 'italic') +
+#   # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
+#   geom_hline(yintercept = 0, linetype = "dashed", alpha = .25) +
+#   geom_vline(xintercept = 0, linetype = "dashed", alpha = .25) +
+#   geom_abline(intercept = -0.019, slope = 0.0548, alpha = .4, linetype = "solid") +
+#   annotate("text", x = -.35, y = .1, label = "paste(italic(t), \" = 2.15, \", d.f., \" = 28, \",italic(P), \" = 0.0396\")", parse = TRUE) +
+#   annotate("text", x = -.35, y = .09, label = "paste(italic(R)^{2}, \" = 0.11\")", parse = TRUE) +
+#   xlab("Simulated change in overwinter population growth\nwith 1 std. dev. larger last generation") +
+#   ylab("Observed statewide population trend\n(1st generation, 1996-2022)") +
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# 
+# ggsave(filename = "figS5.tif", path = "figures", device='tiff', dpi=600)
+# 
+# 

@@ -7,7 +7,6 @@
 ## Email: tyson.wepprich@gmail.com
 ## ---
 ## Notes: 
-## 
 ## ---
 
 source('code/01_data_prep.R')
@@ -73,7 +72,7 @@ sp_levels <- voltprop %>% arrange(sp_mean) %>% pull(Latin) %>% unique()
 
 voltprop$Latin_ordered = factor(voltprop$Latin, levels=sp_levels, ordered = TRUE)
 
-# Fig. S1 ----
+# Fig. S2 ----
 ggplot(voltprop %>% filter(volt != "mid"), aes(x = Latin_ordered, y = mu_date, group = volt, color = gen)) +
   geom_point(aes(size = prop_gen), shape = 15, position = position_dodge(width = 1)) +
   scale_size_area(name = "Proportion:", breaks = c(0.25, 0.75)) +
@@ -96,7 +95,7 @@ ggplot(voltprop %>% filter(volt != "mid"), aes(x = Latin_ordered, y = mu_date, g
         legend.spacing.y = unit(1, "mm")) +
   guides(color = guide_legend(override.aes = list(size=5)))
 
-ggsave(filename = "figS1.tif", path = "figures", device='tiff', dpi=600, width = 7.5, height = 13, units = "in")
+ggsave(filename = "figS2.tif", path = "figures", device='tiff', dpi=600, width = 9, height = 13, units = "in")
 
   
 
