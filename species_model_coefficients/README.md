@@ -25,12 +25,12 @@ These three files contain results that did not fit in the Supporting Information
   * sd_(Observation): standard deviation of residual variation
 
 * TraitsTable.csv: Voltinism traits that correspond to estimates and 95% confidence intervals in Fig. 3.
- * Latin: species name
- * Sample: data used for the species models of last generation size and overwinter population growth rates respectively.
- * Generations: statewide distribution of counts to different generations by percent.
- * meandoy: species' mean date of penultimate generation phenology
- * LG_trend: temporal trend in last generation size
- * LGspatial: sensitivity of last generation size to penultimate generation phenology consistent with local adaptation
- * LGannual: sensitivity of last generation size to penultimate generation phenology consistent with phenotypic plasticity
- * LGsim: geometric mean of simulated overwinter population growth rates if species had larger last generations across all observations
- * PopTrend: long-term statewide population trend estimated from the first generations only
+  * Latin: species name
+  * Sample: data used for the species models of last generation size and overwinter population growth rates respectively.
+  * Generations: statewide distribution of counts to different generations by percent.
+  * meandoy: species' mean date of penultimate generation phenology
+  * LG_trend: temporal trend in last generation size
+  * LGspatial: sensitivity of last generation size to penultimate generation phenology consistent with local adaptation
+  * LGannual: sensitivity of last generation size to penultimate generation phenology consistent with phenotypic plasticity
+  * LGsim: geometric mean of simulated overwinter population growth rates if species had larger last generations across all observations
+  * PopTrend: long-term statewide population trend estimated from the first generations only
