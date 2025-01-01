@@ -180,7 +180,7 @@ for (sp in 1:nrow(mvspecies)){
            sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites"))
 
   mmplt <- ggplot(dat4, aes(x = accumdegday, y = GenTotal, color = as.factor(gen))) +
-    geom_point(alpha = .3) +
+    geom_point(alpha = .3, size = .9) +
     scale_y_continuous(limits = c(0, 190), expand = c(0,0), breaks = c(0, 50, 100, 150)) +
     scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, .1))) +
     scale_color_brewer(name = NULL, type = "qual", palette = "Dark2") +
@@ -190,7 +190,7 @@ for (sp in 1:nrow(mvspecies)){
     #         subtitle = "voltinism mixture model on degree-day scale") +
     labs(color = "Generation") +
     labs(x = "Degree-days accumulated (5/30°C thresholds)") +
-    labs(y = "Observed and imputed weekly counts") +
+    labs(y = "\nObserved and imputed weekly counts") +
     theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
     theme(legend.position = "none")
   mmplt

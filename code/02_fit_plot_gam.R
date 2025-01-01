@@ -291,7 +291,7 @@ for (mf in seq_along(modfiles)){
     mutate(yrgroup = ifelse(year %in% c(2010, 2011, 2012, 2016, 2017), "Warm years", "Cool years"),
            sitegroup = ifelse(region %in% c("NE", "NW"), "Cool sites", "Warm sites")) %>%
     group_by(sitegroup, yrgroup) %>%
-    filter(SiteYear %in% sample(unique(SiteYear), 10, replace = TRUE))
+    filter(SiteYear %in% sample(unique(SiteYear), 10, replace = FALSE))
   
   outs <- counts %>% 
     filter(Total > 0) %>% 
@@ -314,7 +314,7 @@ for (mf in seq_along(modfiles)){
     labs(color = "Total degree-days\n for site and year") +
     labs(x = "Degree-days accumulated (5/30C thresholds)") +
     labs(y = "Scaled phenology (model predictions)")
-  # gamplt
+  gamplt
   ggsave(filename = paste(tmp$params$CommonName, "GAM", "GDD", "png", sep = "."),
   plot = gamplt, device = "png", path = "figures/species_gams/", width = 10, height = 7.5, units = "in")
 
@@ -329,8 +329,12 @@ for (mf in seq_along(modfiles)){
             # subtitle = "Seasonal phenology modeled on degree-day scale") +
     labs(x = "Degree-days accumulated (5/30°C thresholds)") +
     labs(y = "Scaled phenology (model predictions)") +
-      theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
-    theme(legend.position = c(.15, .925))
+      theme(panel.grid.minor = element_blank(), 
+            panel.grid.major = element_blank(),
+            axis.text.y = element_text(size = 6),
+            legend.margin=margin(c(0,0,0,0))) +
+    guides(color = guide_legend(override.aes = list(linewidth=1))) +
+    theme(legend.position = c(.15, .9))
   gamplt
   ggsave(filename = "fig2A.tif", path = "figures", device='tiff', dpi=600)
 
@@ -345,14 +349,19 @@ for (mf in seq_along(modfiles)){
   gamdoyplt <- ggplot(preds2, aes(x = date, y = Gamma, group = SiteYear, color = yrgroup)) +
     geom_path(alpha = .75) +
     scale_colour_brewer(name = NULL, palette = "Set1", direction = -1) +
+    scale_y_continuous(limits = c(0, NA)) +
     scale_x_date(date_breaks = "1 month", date_labels = "%b") +
     facet_wrap(~sitegroup, ncol = 1, scales = "free_y") +
     # ggtitle(paste0(tmp$params$CommonName, " (", latin, ")"),
     # subtitle = "Seasonal phenology modeled on degree-day scale") +
     labs(x = "Calendar date") +
     labs(y = "Scaled phenology (model predictions)") +
-    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) +
-    theme(legend.position = c(.15, .925))
+    theme(panel.grid.minor = element_blank(), 
+          panel.grid.major = element_blank(),
+          axis.text.y = element_text(size = 6),
+          legend.margin=margin(c(0,0,0,0))) +
+    guides(color = guide_legend(override.aes = list(linewidth=1))) +
+    theme(legend.position = c(.15, .9))
   gamdoyplt
   ggsave(filename = "fig2B.tif", path = "figures", device='tiff', dpi=600)
 

@@ -256,23 +256,26 @@ catdat <- bind_cols(catdat1, catdat2) %>%
 
 sp_levels <- catdat %>% filter(Trait == "trend") %>% arrange(-Estimate) %>% pull(Latin) %>% unique()
 catdat$Trait <- factor(catdat$Trait, levels = c("LG_trend", "local_adapt", "annual_plast", "lg_sim", "trend"), ordered = TRUE)
-levels(catdat$Trait) <- c("Trend in last\ngeneration size", "Last generation:\nlocal adaptation", "Last generation:\nphenotypic plasticity", 
-                                  "Simulated effect of\nlarger last generation","Population trend\n(1st generation only)")
+levels(catdat$Trait) <- c("Temporal trend in last\ngeneration size", "Response of last\ngeneration size\nto phenology:\nlocal adaptation", "Response of last\ngeneration size\nto phenology:\nphenotypic plasticity", 
+                                  "Simulated effect of\nlarger last generation\non overwinter\npopulation growth","Long-term\npopulation trend\n(1st generation only)")
 catdat$Latin_ordered = factor(catdat$Latin, levels=sp_levels, ordered = TRUE)
 
 ggplot(catdat, aes(y = Latin_ordered, x = Estimate, color = pnt_shape)) + 
-  geom_vline(xintercept = 0, linetype = "dashed", alpha = .5) +
-  geom_hline(yintercept = seq(5.5, 25.5,length.out = 5), alpha = .1) +geom_point() + 
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = .25, size = .15) +
+  geom_hline(yintercept = seq(5.5, 25.5,length.out = 5), alpha = .1, size = .15) +
+  geom_point(size = .1) + 
   scale_color_manual(name = NULL, values = c("gray", "black")) +
   geom_pointrange(aes(xmin = lwr, 
-                      xmax = upr)) +
+                      xmax = upr), size = .1) +
   xlab("Estimate (95% CI)") +
   ylab(NULL) +
   facet_grid(~Trait, scales = "free") +
-  theme_bw(base_size = 14) +
+  theme_bw(base_size = 10) +
   theme(legend.position = "none") +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.text.y = element_text(face = "italic"))
 ggsave(filename = "fig3.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "fig3.png", path = "C:/Users/tmwepprich/Desktop/voltinism_revision", 
+       device='png', dpi=600, width = 200, height = 120, units = "mm")
 
 
 species <- read.csv("data/species_names.csv") %>% 
@@ -304,9 +307,9 @@ ggsave(filename = "figS9.tif", path = "figures", device='tiff', dpi=600)
 traits_clean <- traits
 names(traits_clean) <- c("CommonName", 
                          "Trend in last\ngeneration size", 
-                         "Last generation:\nlocal adaptation", 
-                         "Last generation:\nphenotypic plasticity",
-                         "Population\ntrend",
+                         "Response to phenology:\nlocal adaptation", 
+                         "Response to phenology:\nphenotypic plasticity",
+                         "Long-term\npopulation trend",
                          "Simulated effect of\nlarger last generation", "Max # of\ngenerations", "Mean species\nphenology",
                          "Species mean last\ngeneration size")
 traits_clean <- traits_clean[,c(1, 8, 9, 2, 3,4,6,5)]
@@ -357,7 +360,7 @@ attr(Mhi, "dimnames") <- attr(M, "dimnames")
 
 tiff('figures/fig5A_diag.tiff', units="in", width=8, height=8, res=600, compression = 'lzw')
 
-corrplot::corrplot(Mcoef, type = "upper", addCoef.col = 'black', tl.col	= "black", col = COL2('BrBG', 100), number.digits = 2, diag = TRUE)
+corrplot::corrplot(Mcoef, type = "upper", addCoef.col = 'black', tl.col	= "black", col = COL2('BrBG', 100), number.digits = 2, diag = FALSE)
 
 conf <- paste0("(", format(Mlo, digits=1, nsmall = 2), ",", format(Mhi, digits=1, nsmall = 2), ")")
 xs <- row(Mlo)
@@ -389,22 +392,30 @@ names(lg_trend_wide) <- c("CommonName", "LG_trend_lo", "LG_trend", "LG_trend_hi"
 plt_trait <- merge(trend_wide, lg_trend_wide)
 plt_trait <- left_join(plt_trait, species)
 
-theme_set(theme_bw(base_size = 16)) 
+theme_set(theme_bw(base_size = 12)) 
 
 # Fig. 5B and S6 ----
 ggplot(plt_trait, aes(x = LG_trend, y = trend, label = Latin)) +
   geom_point() +
   geom_text_repel(size = 3.25, fontface = "italic", min.segment.length = 0) +
-  # geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
-  # geom_linerange(aes(xmin = LG_trend_lo, xmax = LG_trend_hi), alpha = .3) +
-  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
-  # geom_hline(yintercept = meantrend, linetype = "dashed", alpha = .4) +
-  # geom_vline(xintercept = meansim, linetype = "dashed", alpha = .4) +
   xlab("Voltinism shift: trend in last generation size") +
   ylab("Statewide population trend (1st generation only)") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-# ggsave(filename = "fig5Brevision.tif", path = "figures", device='tiff', dpi=600)
 ggsave(filename = "figS6.tiff", path = "figures", device='tiff', dpi=600)
+
+fig5b <- ggplot(plt_trait, aes(x = LG_trend, y = trend, label = Latin)) +
+  geom_point() +
+  # geom_text_repel(size = 3.25, fontface = "italic", min.segment.length = 0) +
+  geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
+  geom_linerange(aes(xmin = LG_trend_lo, xmax = LG_trend_hi), alpha = .3) +
+  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
+  # geom_hline(yintercept = meantrend, linetype = "dashed", alpha = .4) +
+  # geom_vline(xintercept = meansim, linetype = "dashed", alpha = .4) +
+  xlab("Temporal trend in last generation size") +
+  ylab("Long-term population trend\n(1st generation only)") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave(filename = "fig5Brevision.tif", path = "figures", device='tiff', dpi=600)
+
 
 
 OW_sim_wide <- trait.df %>% 
@@ -418,16 +429,20 @@ plt_trait <- left_join(plt_trait, species)
 ggplot(plt_trait, aes(x = LG_sim, y = trend, label = Latin)) +
   geom_point() +
   geom_text_repel(size = 3.25, fontface = "italic", min.segment.length = 0) +
-  # geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
-  # geom_linerange(aes(xmin = LG_sim_lo, xmax = LG_sim_hi), alpha = .3) +
-  # scale_y_continuous(limits=c(0,100), expand = expansion(mult = c(0, 0))) +
-  # geom_hline(yintercept = meantrend, linetype = "dashed", alpha = .4) +
-  # geom_vline(xintercept = meansim, linetype = "dashed", alpha = .4) +
   xlab("Simulated effect of larger last generation size\non overwinter population growth rates") +
   ylab("Statewide population trend (1st generation only)") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-# ggsave(filename = "fig5Crevision.tif", path = "figures", device='tiff', dpi=600)
 ggsave(filename = "figS7.tiff", path = "figures", device='tiff', dpi=600)
+
+fig5c <- ggplot(plt_trait, aes(x = LG_sim, y = trend, label = Latin)) +
+  geom_point() +
+  geom_linerange(aes(ymin = trend_lo, ymax = trend_hi), alpha = .3) +
+  geom_linerange(aes(xmin = LG_sim_lo, xmax = LG_sim_hi), alpha = .3) +
+  xlab("Simulated effect of larger last generation size\non overwinter population growth rates") +
+  ylab("Long-term population trend\n(1st generation only)") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave(filename = "fig5Crevision.tif", path = "figures", device='tiff', dpi=600)
+
 
 # Fig. S8 ----
 # plasticity vs species phenology

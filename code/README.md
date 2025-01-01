@@ -17,7 +17,7 @@ Follow the numbered R scripts to reproduce the analysis.
 * 06_community_models.R: Main analysis of community models (last generation size, overwinter growth rate)
   * Tables S1 and S2 for model coefficients
   * Fig. 4
-  * Fig. S4 and S5
+  * Fig. S3, S4, and S5
   * Tables S6 and S7 for imputation check
 * 07_voltinism_traits.R: Analysis of species' traits correlated with population trends, phylogenetic analysis
   * Table S3

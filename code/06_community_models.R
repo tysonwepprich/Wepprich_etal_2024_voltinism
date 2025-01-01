@@ -91,10 +91,10 @@ final <- get_model(step_res)
 (step_res <- step(mod_lam_wgt))
 final_wgt <- get_model(step_res)
 
-summary(final)
+summary(final)http://127.0.0.1:39189/graphics/plot_zoom_png?width=1191&height=956
 summary(final_wgt)
 
-# Fig S2: Last generation response (community model) ----
+# Fig S3: Last generation response (community model) ----
 pltdat <- ggpredict(final, c("zordann", "zordsite[-.23,.23]", "zordspec[-1,1]")) 
 # change attributes so facets labeled (3rd one only?)
 attr(pltdat, "terms") <- c("Peak date annual variation", "Site mean phenology", "Species mean phenology")
@@ -107,17 +107,17 @@ attr(pltdat, "terms") <- c("Peak date annual variation", "Site mean phenology", 
 
 pltdat <- plot(pltdat) + 
   labs(
-    x = "Annual variation in phenology (standard deviation)",
+    x = "Annual deviation in phenology (SD from site mean, where negative is earlier)",
     y = "Last generation size\nlog(last generation / penultimate generation)",
     title = NULL) +
-  scale_colour_brewer(palette = "Set1", labels = c("-1 SD (earlier, warmer site)", "+1 SD (later, cooler site)")) +
+  scale_colour_brewer(palette = "Set1", labels = c("-1 SD earlier (warmer site)", "+1 SD later (cooler site)")) +
   scale_fill_brewer(palette = "Set1") +
   theme_bw(base_size = 18) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
   theme(legend.position = c(.15, .85)) +
   guides(color=guide_legend(title="Site mean\nphenology"))
 pltdat
-ggsave(filename = "figS2.tif", path = "figures", device='tiff', dpi=600)
+ggsave(filename = "figS3.tif", path = "figures", device='tiff', dpi=600)
 
 
 # Table S1: Last generation size ----
@@ -190,7 +190,7 @@ pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zfrostann[-1,
 attr(pltdat, "terms") <- c("Last generation size", "Site mean last generation size", "Winter onset", "Species season")
 
 pltdat1 <- plot(pltdat) + 
-  scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD (cooler)", "+1 SD (warmer)")) +
+  scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD smaller (cooler site)", "+1 SD larger (warmer site)")) +
   scale_fill_brewer(palette = "Set1", direction = -1) +
   scale_y_continuous(limits = c(-1.9, .6), breaks = c(-1.5, -1.0, -0.5, 0, 0.5)) +
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
@@ -198,7 +198,7 @@ pltdat1 <- plot(pltdat) +
   annotate("text", x = -1.72, y = .38, label = "Earlier species\nJuly 2 peak", size = 5) +
   theme_bw(base_size = 16) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
-  theme(legend.position = c(.15, .2)) +
+  theme(legend.position = c(.2, .2)) +
   guides(color=guide_legend(title="Site mean\nlast generation size"))
 # pltdat1
 
@@ -254,7 +254,7 @@ pltdat <- ggpredict(final, c("zlastann[-3:3]", "zlastsite[-1,1]", "zwinterann[-1
 attr(pltdat, "terms") <- c("Last generation size", "Site mean last generation size", "Winter temperature", "Species season")
 
 pltdat1 <- plot(pltdat) + 
-  scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD (cooler)", "+1 SD (warmer)")) +
+  scale_colour_brewer(name = "Site mean\nLG size", palette = "Set1", direction = -1, labels = c("-1 SD smaller (cooler site)", "+1 SD larger (warmer site)")) +
   scale_fill_brewer(palette = "Set1", direction = -1) +
   scale_y_continuous(limits = c(-2, .6), breaks = c(-1.5, -1.0, -0.5, 0, 0.5)) +
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
@@ -262,7 +262,7 @@ pltdat1 <- plot(pltdat) +
   annotate("text", x = -1.72, y = .38, label = "Earlier species\nJuly 2 peak", size = 5) +
   theme_bw(base_size = 16) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 
-  theme(legend.position = c(.15, .2)) +
+  theme(legend.position = c(.2, .2)) +
   guides(color=guide_legend(title="Site mean\nlast generation size"))
 # pltdat1
 
@@ -333,7 +333,7 @@ pltdat2 <- plot(pltdat) +
   scale_fill_brewer(palette = "Set1", direction = -1) +
   # scale_y_continuous(limits=c(-2,1), expand = expansion(mult = c(0, 0))) +
   labs(title = "Late season species",
-       x = "Last generation size (annual variation)",
+       x = "Annual deviation of last generation size (SD)",
        y = "Overwinter growth rate") +
   theme_bw(base_size = 16) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank()) + 

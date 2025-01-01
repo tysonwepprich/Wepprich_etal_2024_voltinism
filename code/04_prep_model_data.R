@@ -227,17 +227,16 @@ lgvarplt <- ggplot(data = lgvar, aes(x = photo, y = lastratio, group = SiteID, c
             size = 1,
             # linetype ="dashed",
             alpha = 0.5) +  
-  scale_color_gradient(name = "Mean site\ndegree-days", high = "#ca0020", low = "#0571b0") +
+  scale_color_gradient(name = "Mean site\ndegree-days", high = "#ca0020", low = "#0571b0", breaks = c(2710, 3380)) +
   scale_y_log10() +
   scale_x_reverse() +
   geom_point(data = lgsite, aes(x = site_photo, y = site_LG), inherit.aes = FALSE, color = "black", size = 1.5) +
   geom_smooth(data = lgsite, aes(x = site_photo, y = site_LG), inherit.aes = FALSE, method = "lm", se = FALSE, color = "black", size = 1.25) +
-  theme_bw(base_size = 18) +
   theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(),
-        legend.position = c(.85, .8)) +
+        legend.position = c(.85, .75)) +
   labs(
     x = "Day length (hours) at mean phenology\nof penultimate generation",
-    y = "Relative size of last generation compared\nto penultimate generation size (axis on log scale)",
+    y = "Relative size of last generation compared\nto penultimate generation size (log scale)",
     title = NULL)
 
 lgvarplt
